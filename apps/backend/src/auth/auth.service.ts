@@ -1,48 +1,77 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
+import { prismaClient as prisma } from "@repo/db/client";
+
 
 export const authService = {
-    async register(username: string, password: string, name: string) {
+    async register(email: string, password: string, name: string) {
+        try{
+
         // Hash password with bcrypt
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // TODO: Save to database
-        // const user = await db.user.create({ username, hashedPassword, name });
+        // Save new user with email password and name
+        const user = await prisma.user.create({
+            data: {
+                email,
+                password: hashedPassword,
+                name,
+            },
+        });
 
-        // Mock user ID for now
-        const userId = "user_" + Date.now();
+        const userId = user.id;
 
         // Generate JWT token
         const token = jwt.sign(
-            { userId, username },
+            { userId, email },
             JWT_SECRET,
             { expiresIn: '7d' }
         );
 
         return {
             token,
-            user: { userId, username, name }
+            user: { userId, email, name }
         };
+       }catch(e){
+        console.error("Registration",e)
+        throw new Error("Login failed")
+       }
     },
 
-    async login(username: string, password: string) {
-        // TODO: Fetch user from database and verify password
-        // const user = await db.user.findByUsername(username);
-        // const isValid = await bcrypt.compare(password, user.hashedPassword);
+    async login(email: string, password: string) {
+        try{
+        //Fetching  user from database
+        const user= await prisma.user.findUnique({
+            where:{email:email}
+        })
+        if(!user){
+            return ;
+        }
+        const userId=user.id
+        //compare the both passwords
+        const isvalid=await bcrypt.compare(password, user.password)
+        // if isvalid true then generate a token or thrw error
 
-        // Mock implementation
-        const userId = "user_123";
 
-        const token = jwt.sign(
-            { userId, username },
+        if(!isvalid){
+            throw new Error("Invalid password or email");
+            
+        }
+                        const token = jwt.sign(
+            { userId, email },
             JWT_SECRET,
             { expiresIn: '7d' }
         );
 
         return {
             token,
-            user: { userId, username }
-        };
-    }
+            user: { userId, email }
+         };
+        }
+        catch(error){
+            console.error("Login error",error)
+            throw new Error("Login error")
+        }
+   }
 };
