@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
+import {JWT_SECRET} from "@repo/backend-common/config"
 interface AuthTokenPayload {
   userId: string;
 }
@@ -21,8 +21,8 @@ export function authMiddleware(
     return res.status(403).json({ message: "unauthorized" });
   }
   try {
-    const decoded = jwt.verify(token, "secret") as unknown as AuthTokenPayload;
-    req.userId = decoded.userId; // ✅
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as AuthTokenPayload;
+    req.userId = decoded.userId; 
     next();
   } catch {
     return res.status(403).json({ message: "unauthorized" });
