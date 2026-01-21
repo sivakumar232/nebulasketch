@@ -1,3 +1,5 @@
+//backend common module is use to share between http and ws
+
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -21,7 +23,7 @@ const parseEnv = () => {
   });
 
   if (!result.success) {
-    console.error('❌ Invalid environment variables:');
+    console.error('Invalid environment variables:');
     console.error(result.error.format());
     throw new Error('Environment validation failed. Check your .env file.');
   }

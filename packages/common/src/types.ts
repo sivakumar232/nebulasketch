@@ -1,3 +1,5 @@
+// common-module is used to share zod validation between frontend and http backend
+
 import { z } from 'zod';
 
 export const CreateUserSchema = z.object({
