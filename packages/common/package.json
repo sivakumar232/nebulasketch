@@ -1,21 +1,30 @@
 {
   "name": "@repo/common",
   "version": "1.0.0",
-  "exports":{
-    "./types":"./src/types.ts"
+  "exports": {
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.js"
+    }
   },
+  "main": "./dist/types.js",
+  "module": "./dist/types.mjs",
+  "types": "./dist/types.d.ts",
   "description": "",
-  "main": "index.js",
   "scripts": {
+    "build": "tsup src/types.ts --format esm,cjs --dts",
+    "dev": "tsup src/types.ts --format esm,cjs --dts --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*"
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.0.0",
+    "typescript": "5.9.2"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "zod": "^4.3.5"
   }

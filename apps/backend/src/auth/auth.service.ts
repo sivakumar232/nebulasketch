@@ -34,8 +34,7 @@ export const authService = {
             user: { userId, email, name }
         };
        }catch(e){
-        console.error("Registration",e)
-        throw new Error("Login failed")
+        throw new Error("register error")
        }
     },
 
