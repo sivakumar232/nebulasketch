@@ -5,7 +5,7 @@ import { validate } from "../middlewares/validate.middleware";
 import { CreateRoomSchema } from "@repo/common/types";
 
 const router: Router = Router();
-
+// api/room/create
 router.post("/create",authMiddleware,validate(CreateRoomSchema),createroom);
 
 export default router;

@@ -1,22 +1,18 @@
 import { Response, Request } from "express";
-import type { CreateRoomInput } from "@repo/common/types";
-
+import { CreateRoomSchema, type CreateRoomInput } from "@repo/common/types";
+import { createroomService } from "./room.service";
 export const createroom = async (req: Request, res: Response) => {
     try {
-        const { name } = req.body as CreateRoomInput;
-        const userId = req.userId; // From auth middleware
+        const { name } = req.body
+        const adminId = req.userId; // From auth middleware
+        if(!adminId){
+            return res.status(401).json({message:"unauthorized"})
+        }
+        
+        const room=await createroomService.create(name,adminId)
 
         // TODO: Save room to database
-        const roomId = "room_" + Date.now();
 
-        return res.status(201).json({
-            message: 'Room created successfully',
-            room: {
-                roomId,
-                name,
-                createdBy: userId
-            }
-        });
     } catch (error) {
         console.error('Create room error:', error);
         return res.status(500).json({
