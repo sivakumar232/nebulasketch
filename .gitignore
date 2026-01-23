@@ -28,7 +28,7 @@ build
 dist
 
 
-# Debug
+# Debug 
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -39,3 +39,7 @@ yarn-error.log*
 
 architecture.md
 execution-plan.md
+build-guide.md
+incremental-guide.md
+learning-guide.md
+database-schema.md
