@@ -1,7 +1,7 @@
 import { Response, Request } from "express";
 import { CreateRoomSchema, type CreateRoomInput } from "@repo/common/types";
 import { createroomService } from "./room.service";
-
+import { GetChatService } from "./room.service";
 export const createroom = async (req: Request, res: Response) => {
     try {
         const { name } = req.body
@@ -20,3 +20,13 @@ export const createroom = async (req: Request, res: Response) => {
         });
     }
 };
+
+export const getchat = async (req:Request,res:Response)=>{
+    try{
+    const roomId = Number(req.params.roomId);
+    const messages =await GetChatService.chat(roomId)
+    return res.status(201).json(messages)
+    }catch(e){
+        throw new Error("failed to load chats")
+    }
+}
