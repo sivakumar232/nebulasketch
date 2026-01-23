@@ -2,10 +2,30 @@
 
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import path from 'path';
+import fs from 'fs';
 
-// Load .env from backend app directory
-// Note: This assumes the working directory is the monorepo root
-dotenv.config({ path: './apps/backend/.env' });
+// Find monorepo root by looking for pnpm-workspace.yaml
+const findMonorepoRoot = (): string => {
+  let currentDir = __dirname;
+
+  // Traverse up the directory tree
+  while (currentDir !== path.parse(currentDir).root) {
+    if (fs.existsSync(path.join(currentDir, 'pnpm-workspace.yaml'))) {
+      return currentDir;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+
+  // Fallback to process.cwd() if not found
+  return process.cwd();
+};
+
+const monorepoRoot = findMonorepoRoot();
+const envPath = path.join(monorepoRoot, 'apps/backend/.env');
+
+// Load .env from backend app directory with absolute path
+dotenv.config({ path: envPath });
 
 // Environment schema with validation
 const envSchema = z.object({

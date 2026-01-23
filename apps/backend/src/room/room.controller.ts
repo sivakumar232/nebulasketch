@@ -1,6 +1,7 @@
 import { Response, Request } from "express";
 import { CreateRoomSchema, type CreateRoomInput } from "@repo/common/types";
 import { createroomService } from "./room.service";
+
 export const createroom = async (req: Request, res: Response) => {
     try {
         const { name } = req.body
@@ -10,8 +11,7 @@ export const createroom = async (req: Request, res: Response) => {
         }
         
         const room=await createroomService.create(name,adminId)
-
-        // TODO: Save room to database
+        return res.status(201).json(room)
 
     } catch (error) {
         console.error('Create room error:', error);

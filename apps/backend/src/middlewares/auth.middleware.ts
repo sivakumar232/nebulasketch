@@ -10,6 +10,7 @@ export function authMiddleware(
   res: Response,
   next: NextFunction
 ) {
+  console.log("next request hit the middleware")
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -23,6 +24,7 @@ export function authMiddleware(
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as unknown as AuthTokenPayload;
     req.userId = decoded.userId; 
+    console.log("request passed from the middleware")
     next();
   } catch {
     return res.status(403).json({ message: "unauthorized" });
