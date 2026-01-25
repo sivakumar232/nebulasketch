@@ -3,7 +3,7 @@ import { authService } from "./auth.service";
 import type { CreateUserInput, SigninInput } from "@repo/common/types";
 import { string } from "zod";
 
-export const register = async (req: Request, res: Response) => {
+export const signup = async (req: Request, res: Response) => {
     try {
         const { email, password, name } = req.body as CreateUserInput;
 
@@ -22,7 +22,7 @@ export const register = async (req: Request, res: Response) => {
     }
 };
 
-export const login = async (req: Request, res: Response) => {
+export const signin = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body as SigninInput;
 

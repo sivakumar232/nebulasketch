@@ -12,9 +12,13 @@
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
+    "konva": "^10.2.0",
     "next": "16.1.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-konva": "^19.2.1",
+    "tldraw": "^4.3.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

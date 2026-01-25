@@ -27,14 +27,6 @@ export const createroomService={
 
 export const GetChatService={
     async chat(roomId:number){
-        return prisma.chat.findMany({
-            where:{
-                roomId:roomId
-            },
-            orderBy:{
-                id:"desc"
-            },
-            take:50
-        })   
+
     }
 }
