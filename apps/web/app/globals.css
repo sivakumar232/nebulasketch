@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Optional custom theme */
+@theme {
+  --color-primary: oklch(65% 0.2 240);
+}
+
+/* Or classic directives if you prefer */
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities; */
