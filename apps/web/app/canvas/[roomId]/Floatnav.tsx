@@ -1,54 +1,61 @@
-"use client"
-import React from 'react';
-import { 
-  Square, 
-  Circle, 
-  MousePointer2, 
-  Type, 
-  Eraser, 
-  Minus, 
-  ArrowRight 
-} from 'lucide-react';
+"use client";
+import React from "react";
+import {
+  Square,
+  Circle,
+  MousePointer2,
+  Type,
+  Eraser,
+  Minus,
+  ArrowRight,
+} from "lucide-react";
+
+type Tool = "select" | "rect" | "circle";
 
 interface Props {
-  addShape: (type: "rect" | "circle") => void;
-  activeTool?: string; // Optional: to highlight the selected tool
+  activeTool: Tool;
+  setActiveTool: (tool: Tool) => void;
 }
 
-const Floatnav = ({ addShape, activeTool = "rect" }: Props) => {
+const Floatnav = ({ activeTool, setActiveTool }: Props) => {
   return (
-    <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-[#ffffff] border border-gray-200 p-1 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] select-none">
-      
+    <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-[#ffffff] border border-gray-200 p-1 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] select-none z-50">
+
       {/* Selection Tool */}
-      <NavButton 
-        icon={<MousePointer2 size={19} strokeWidth={2.5} />} 
-        label="Selection" 
+      <NavButton
+        icon={<MousePointer2 size={19} strokeWidth={2.5} />}
+        label="Selection"
         shortcut="1"
-        isActive={activeTool === 'select'}
+        isActive={activeTool === "select"}
+        onSelect={() => setActiveTool("select")}
       />
-      
+
       <div className="w-[1px] h-5 bg-gray-200 mx-1" />
 
       {/* Shape Tools */}
-      <NavButton 
-        onClick={() => addShape("rect")} 
-        icon={<Square size={19} />} 
-        label="Rectangle" 
+      <NavButton
+        icon={<Square size={19} />}
+        label="Rectangle"
         shortcut="2"
-        isActive={activeTool === 'rect'}
+        isActive={activeTool === "rect"}
+        onSelect={() => setActiveTool("rect")}
       />
-      <NavButton 
-        onClick={() => addShape("circle")} 
-        icon={<Circle size={19} />} 
-        label="Circle" 
+
+      <NavButton
+        icon={<Circle size={19} />}
+        label="Circle"
         shortcut="3"
-        isActive={activeTool === 'circle'}
+        isActive={activeTool === "circle"}
+        onSelect={() => {
+          console.log("🔴 Circle Tool Selected via onSelect");
+          setActiveTool("circle");
+        }}
       />
-      
-      {/* Line Tools */}
+
+      {/* Line Tools (future) */}
       <NavButton icon={<Minus size={19} />} label="Line" shortcut="4" />
       <NavButton icon={<ArrowRight size={19} />} label="Arrow" shortcut="5" />
-      
+
       <div className="w-[1px] h-5 bg-gray-200 mx-1" />
 
       {/* Utilities */}
@@ -60,31 +67,47 @@ const Floatnav = ({ addShape, activeTool = "rect" }: Props) => {
 
 interface NavBtnProps {
   icon: React.ReactNode;
-  onClick?: () => void;
   label: string;
   shortcut: string;
   isActive?: boolean;
+  onSelect?: () => void;
 }
 
-const NavButton = ({ icon, onClick, label, shortcut, isActive }: NavBtnProps) => (
+const NavButton = ({
+  icon,
+  label,
+  shortcut,
+  isActive,
+  onSelect,
+}: NavBtnProps) => (
   <button
-    onClick={onClick}
+    onMouseDown={(e) => {
+      console.log(`🖱️ NavButton MouseDown: ${label}`);
+      e.preventDefault();      // Prevent default focus/selection behavior
+      e.stopPropagation();     // 🔥 BLOCK canvas mousedown
+      onSelect?.();            // 🔥 set tool IMMEDIATELY
+    }}
+    onMouseUp={(e) => {
+      e.stopPropagation();     // 🔥 BLOCK canvas mouseup
+    }}
     className={`
       group relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150
-      ${isActive 
-        ? 'bg-[#e0e0ff] text-[#6965db]' 
-        : 'hover:bg-[#f0f0f8] text-gray-600 hover:text-gray-900'}
+      ${isActive
+        ? "bg-[#e0e0ff] text-[#6965db]"
+        : "hover:bg-[#f0f0f8] text-gray-600 hover:text-gray-900"
+      }
     `}
   >
     {icon}
-    
+
     {/* Tooltip */}
     <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
       <div className="bg-gray-800 text-white text-[11px] px-2 py-1 rounded-md flex items-center gap-2 whitespace-nowrap shadow-lg">
         <span className="font-medium">{label}</span>
-        <span className="text-gray-400 border border-gray-600 px-1 rounded text-[9px]">{shortcut}</span>
+        <span className="text-gray-400 border border-gray-600 px-1 rounded text-[9px]">
+          {shortcut}
+        </span>
       </div>
-      {/* Tooltip Arrow */}
       <div className="w-2 h-2 bg-gray-800 rotate-45 -mt-1.5" />
     </div>
   </button>

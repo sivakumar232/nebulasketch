@@ -1,19 +1,21 @@
-"use client"
-import { useEffect, useState } from "react"
+"use client";
 
-export function useWindowSize(){
-    const [size,setSize] =useState({width:0,height:0})
+import { useEffect, useState } from "react";
 
-    useEffect(()=>{
-        const update =()=>
-        {
-            setSize({width:window.innerWidth,height:window.innerHeight})
+export function useWindowSize() {
+  const [size, setSize] = useState({ width: 0, height: 0 });
 
-        }
-        update();
-        window.addEventListener("resize",update)
-        return ()=> window.removeEventListener("resize",update)
+  useEffect(() => {
+    const update = () =>
+      setSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
 
-    },[]);
-    return size;
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  return size;
 }
