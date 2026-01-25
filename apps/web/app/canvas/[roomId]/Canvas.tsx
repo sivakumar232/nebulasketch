@@ -4,9 +4,11 @@ import { Stage, Layer, Rect, Circle } from "react-konva";
 import { useWindowSize } from "../../hooks/useWindow";
 import Floatnav from "./Floatnav";
 import { useShapes } from "./useShapes";
+import { useRef } from "react";
 
 const Canvas = () => {
   const { width, height } = useWindowSize();
+  const transformerRef =useRef<any>(null);
   const {
     shapes,
     draft,
@@ -15,9 +17,13 @@ const Canvas = () => {
     startDrawing,
     updateDrawing,
     finishDrawing,
+    updateShapePosition,
+    setSelectedId
   } = useShapes();
 
   if (!width || !height) return null;
+
+  
 
   return (
     <>
@@ -50,6 +56,7 @@ const Canvas = () => {
                 width={s.width}
                 height={s.height}
                 stroke={s.color}
+                draggable={activeTool === "select"}
               />
             ) : (
               <Circle
@@ -58,6 +65,15 @@ const Canvas = () => {
                 y={s.y}
                 radius={s.radius}
                 stroke={s.color}
+                draggable={activeTool === "select"}
+      onClick={(e) => {
+        e.cancelBubble = true;
+        setSelectedId(s.id);
+      }}
+      onDragEnd={(e) => {
+        const { x, y } = e.target.position();
+        updateShapePosition(s.id, x, y);
+      }}
               />
             )
           )}

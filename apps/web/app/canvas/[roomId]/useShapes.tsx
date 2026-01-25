@@ -26,7 +26,7 @@ export function useShapes() {
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [draft, setDraft] = useState<Shape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   // mouse down → start drawing
   const startDrawing = (x: number, y: number) => {
     if (activeTool === "rect") {
@@ -69,7 +69,7 @@ export function useShapes() {
 
     if (draft.type === "circle") {
       const dx = x - draft.x;
-      const dy = y - draft.y;
+      const dy = y - draft.y;   
       setDraft({
         ...draft,
         radius: Math.sqrt(dx * dx + dy * dy),
@@ -89,6 +89,13 @@ export function useShapes() {
     setDraft(null);
     setActiveTool("select");
   };
+const updateShapePosition = (id: string, x: number, y: number) => {
+  setShapes((prev) =>
+    prev.map((s) =>
+      s.id === id ? { ...s, x, y } : s
+    )
+  );
+};
 
   return {
     shapes,
@@ -98,5 +105,7 @@ export function useShapes() {
     startDrawing,
     updateDrawing,
     finishDrawing,
+    updateShapePosition,
+    setSelectedId
   };
 }

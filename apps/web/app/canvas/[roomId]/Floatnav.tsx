@@ -82,13 +82,13 @@ const NavButton = ({
 }: NavBtnProps) => (
   <button
     onMouseDown={(e) => {
-      console.log(`🖱️ NavButton MouseDown: ${label}`);
-      e.preventDefault();      // Prevent default focus/selection behavior
-      e.stopPropagation();     // 🔥 BLOCK canvas mousedown
-      onSelect?.();            // 🔥 set tool IMMEDIATELY
+      console.log(`NavButton MouseDown: ${label}`);
+      e.preventDefault();      
+      e.stopPropagation();     
+      onSelect?.();          
     }}
     onMouseUp={(e) => {
-      e.stopPropagation();     // 🔥 BLOCK canvas mouseup
+      e.stopPropagation(); 
     }}
     className={`
       group relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150
