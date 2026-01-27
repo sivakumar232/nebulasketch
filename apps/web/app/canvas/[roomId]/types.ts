@@ -1,0 +1,1 @@
+export type Tool = "select" | "rect" |"ellipse"

@@ -1,6 +1,5 @@
 import { useState } from "react";
-
-export type Tool = "select" | "rect" | "circle";
+import { Tool } from "./types";
 
 export type Shape =
   | {
@@ -15,8 +14,8 @@ export type Shape =
   | {
       id: string;
       type: "ellipse";
-      x: number;
-      y: number;
+      x: number; // center
+      y: number; // center
       radiusX: number;
       radiusY: number;
       color: string;
@@ -28,7 +27,6 @@ export function useShapes() {
   const [draft, setDraft] = useState<Shape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
 
   const startDrawing = (x: number, y: number) => {
     if (activeTool === "rect") {
@@ -44,64 +42,88 @@ export function useShapes() {
       });
     }
 
-if (activeTool === "circle") {
-  setIsDrawing(true);
-  setDraft({
-    id: "draft",
-    type: "ellipse",
-    x,
-    y,
-    radiusX: 0,
-    radiusY: 0,
-    color: "black",
-  });
-}
-
+    if (activeTool === "ellipse") {
+      setIsDrawing(true);
+      setDraft({
+        id: "draft",
+        type: "ellipse",
+        x, // center
+        y, // center
+        radiusX: 0,
+        radiusY: 0,
+        color: "black",
+      });
+    }
   };
 
   const updateDrawing = (x: number, y: number) => {
     if (!draft) return;
 
     if (draft.type === "rect") {
+      const newWidth = (x - draft.x);
+      const newHeight =(y - draft.y);
+
       setDraft({
         ...draft,
-        width: x - draft.x,
-        height: y - draft.y,
+        width: newWidth,
+        height: newHeight,
       });
     }
 
-if (draft.type === "ellipse") {
-  setDraft({
-    ...draft,
-    radiusX: Math.abs(x - draft.x),
-    radiusY: Math.abs(y - draft.y),
-  });
-}
-
+    // ELLIPSE: center-based
+    if (draft.type === "ellipse") {
+      setDraft({
+        ...draft,
+        radiusX: Math.abs(x - draft.x),
+        radiusY: Math.abs(y - draft.y),
+      });
+    }
   };
 
   const finishDrawing = () => {
-    if (!isDrawing || !draft) return;
+  if (!isDrawing || !draft) return;
 
-    setShapes((prev) => [
+  setShapes((prev) => {
+    if (draft.type === "ellipse") {
+      return [
+        ...prev,
+        {
+          ...draft,
+          id: crypto.randomUUID(),
+          radiusX: Math.max(5, draft.radiusX),
+          radiusY: Math.max(5, draft.radiusY),
+        },
+      ];
+    }
+
+    // RECT — normalize from fixed anchor
+    const finalX =
+      draft.width < 0 ? draft.x + draft.width : draft.x;
+    const finalY =
+      draft.height < 0 ? draft.y + draft.height : draft.y;
+
+    return [
       ...prev,
-      { ...draft, id: crypto.randomUUID() },
-    ]);
+      {
+        ...draft,
+        id: crypto.randomUUID(),
+        x: finalX,
+        y: finalY,
+        width: Math.max(5, Math.abs(draft.width)),
+        height: Math.max(5, Math.abs(draft.height)),
+      },
+    ];
+  });
 
-    setDraft(null);
-    setIsDrawing(false);
-    setActiveTool("select");
-  };
+  setDraft(null);
+  setIsDrawing(false);
+  setActiveTool("select");
+};
 
-  // ───────────────── DRAG ─────────────────
 
   const updateShapePosition = (id: string, x: number, y: number) => {
-    setShapes((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, x, y } : s))
-    );
+    setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, x, y } : s)));
   };
-
-  // ───────────────── RESIZE (GENERIC) ─────────────────
 
   const resizeShape = (id: string, scaleX: number, scaleY: number) => {
     setShapes((prev) =>
@@ -116,17 +138,16 @@ if (draft.type === "ellipse") {
           };
         }
 
-if (shape.type === "ellipse") {
-  return {
-    ...shape,
-    radiusX: Math.max(5, shape.radiusX * scaleX),
-    radiusY: Math.max(5, shape.radiusY * scaleY),
-  };
-}
-
+        if (shape.type === "ellipse") {
+          return {
+            ...shape,
+            radiusX: Math.max(5, shape.radiusX * scaleX),
+            radiusY: Math.max(5, shape.radiusY * scaleY),
+          };
+        }
 
         return shape;
-      })
+      }),
     );
   };
 
@@ -142,6 +163,6 @@ if (shape.type === "ellipse") {
     resizeShape,
     selectedId,
     setSelectedId,
-    setShapes
+    setShapes,
   };
 }

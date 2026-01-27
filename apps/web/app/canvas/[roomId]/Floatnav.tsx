@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { Tool } from "./types";
 import {
   Square,
   Circle,
@@ -10,10 +11,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-type Tool = "select" | "rect" | "circle";
 
 interface Props {
-  activeTool: Tool;
+  activeTool: Tool; 
   setActiveTool: (tool: Tool) => void;
 }
 
@@ -45,10 +45,10 @@ const Floatnav = ({ activeTool, setActiveTool }: Props) => {
         icon={<Circle size={19} />}
         label="Circle"
         shortcut="3"
-        isActive={activeTool === "circle"}
+        isActive={activeTool === "ellipse"}
         onSelect={() => {
-          console.log("🔴 Circle Tool Selected via onSelect");
-          setActiveTool("circle");
+          console.log("Circle Tool Selected via onSelect");
+          setActiveTool("ellipse");
         }}
       />
 
