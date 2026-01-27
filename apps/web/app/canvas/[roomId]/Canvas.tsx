@@ -22,9 +22,10 @@ const Canvas = () => {
     resizeShape,
     selectedId,
     setSelectedId,
+    setShapes
   } = useShapes();
 
-  // ✅ HOOK MUST BE HERE (before return)
+  // HOOK MUST BE HERE (before return)
   useEffect(() => {
     if (!transformerRef.current || !selectedId) return;
 
@@ -36,10 +37,13 @@ const Canvas = () => {
     transformerRef.current.getLayer().batchDraw();
   }, [selectedId]);
 
-  // ✅ Early return AFTER hooks
+
   if (!width || !height) return null;
 
+  
+
   return (
+
     <>
       <Floatnav activeTool={activeTool} setActiveTool={setActiveTool} />
 
@@ -124,8 +128,8 @@ const Canvas = () => {
   }}
 />
 
-            )
-          )}
+)
+)}
 
           {draft &&
             (draft.type === "rect" ? (

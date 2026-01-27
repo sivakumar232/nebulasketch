@@ -116,12 +116,14 @@ if (draft.type === "ellipse") {
           };
         }
 
-        if (shape.type === "circle") {
-          return {
-            ...shape,
-            radius: Math.max(5, shape.radius * scaleX),
-          };
-        }
+if (shape.type === "ellipse") {
+  return {
+    ...shape,
+    radiusX: Math.max(5, shape.radiusX * scaleX),
+    radiusY: Math.max(5, shape.radiusY * scaleY),
+  };
+}
+
 
         return shape;
       })
@@ -140,5 +142,6 @@ if (draft.type === "ellipse") {
     resizeShape,
     selectedId,
     setSelectedId,
+    setShapes
   };
 }
