@@ -1,6 +1,14 @@
 "use client";
 
-import { Stage, Layer, Rect, Ellipse, Transformer } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Ellipse,
+  Line,
+  Arrow,
+  Transformer,
+} from "react-konva";
 import { useWindowSize } from "../../hooks/useWindow";
 import Floatnav from "./Floatnav";
 import { useShapes } from "./useShapes";
@@ -19,13 +27,12 @@ const Canvas = () => {
     updateDrawing,
     finishDrawing,
     updateShapePosition,
+    updateShapePoints,
     resizeShape,
     selectedId,
     setSelectedId,
-    setShapes,
   } = useShapes();
 
-  // HOOK MUST BE HERE (before return)
   useEffect(() => {
     if (!transformerRef.current || !selectedId) return;
 
@@ -34,7 +41,7 @@ const Canvas = () => {
     if (!node) return;
 
     transformerRef.current.nodes([node]);
-    transformerRef.current.getLayer().batchDraw();
+    transformerRef.current.getLayer()?.batchDraw();
   }, [selectedId]);
 
   if (!width || !height) return null;
@@ -52,9 +59,7 @@ const Canvas = () => {
 
           const clickedOnEmpty = e.target === stage;
 
-          if (clickedOnEmpty) {
-            setSelectedId(null);
-          }
+          if (clickedOnEmpty) setSelectedId(null);
 
           if (clickedOnEmpty && activeTool !== "select") {
             const pos = stage.getPointerPosition();
@@ -66,83 +71,127 @@ const Canvas = () => {
           const pos = e.target.getStage()?.getPointerPosition();
           if (pos) updateDrawing(pos.x, pos.y);
         }}
-        onMouseUp={() => finishDrawing()}
+        onMouseUp={finishDrawing}
       >
         <Layer>
-          {shapes.map((s) =>
-            s.type === "rect" ? (
-              <Rect
-                id={s.id}
-                key={s.id}
-                x={s.x}
-                y={s.y}
-                width={s.width}
-                height={s.height}
-                stroke={s.color}
-                draggable={activeTool === "select"}
-                onDragEnd={(e) => {
-                  const { x, y } = e.target.position();
-                  updateShapePosition(s.id, x, y);
-                }}
-                onMouseDown={(e) => {
-                  if (activeTool !== "select") return;
-                  e.cancelBubble = true;
-                  setSelectedId(s.id);
-                }}
-                onTransformEnd={(e) => {
-                  const node = e.target;
-                  resizeShape(s.id, node.scaleX(), node.scaleY());
-                  node.scaleX(1);
-                  node.scaleY(1);
-                }}
-              />
-            ) : (
-              <Ellipse
-                id={s.id}
-                key={s.id}
-                x={s.x}
-                y={s.y}
-                radiusX={s.radiusX}
-                radiusY={s.radiusY}
-                stroke={s.color}
-                draggable={activeTool === "select"}
-                onDragEnd={(e) => {
-                  const { x, y } = e.target.position();
-                  updateShapePosition(s.id, x, y);
-                }}
-                onMouseDown={(e) => {
-                  if (activeTool !== "select") return;
-                  e.cancelBubble = true;
-                  setSelectedId(s.id);
-                }}
-                onTransformEnd={(e) => {
-                  const node = e.target;
-                  resizeShape(s.id, node.scaleX(), node.scaleY());
-                  node.scaleX(1);
-                  node.scaleY(1);
-                }}
-              />
-            ),
-          )}
-          {draft &&
-            draft.type === "rect" &&
-            (() => {
-              const renderX = draft.width < 0 ? draft.x + draft.width : draft.x;
-              const renderY =
-                draft.height < 0 ? draft.y + draft.height : draft.y;
-
+          {/* SHAPES */}
+          {shapes.map((s) => {
+            if (s.type === "rect") {
               return (
                 <Rect
-                  x={renderX}
-                  y={renderY}
-                  width={Math.abs(draft.width)}
-                  height={Math.abs(draft.height)}
-                  stroke="black"
-                  dash={[4, 4]}
+                  key={s.id}
+                  {...s}
+                  {...s}
+                  stroke={s.color}
+                  draggable={activeTool === "select"}
+                  onMouseDown={(e) => {
+                    if (activeTool !== "select") return;
+                    e.cancelBubble = true;
+                    setSelectedId(s.id);
+                  }}
+                  onDragEnd={(e) => {
+                    const { x, y } = e.target.position();
+                    updateShapePosition(s.id, x, y);
+                  }}
+                  onTransformEnd={(e) => {
+                    const node = e.target;
+                    resizeShape(s.id, node.scaleX(), node.scaleY());
+                    node.scaleX(1);
+                    node.scaleY(1);
+                  }}
                 />
               );
-            })()}
-          {draft && draft.type === "ellipse" && (
+            }
+
+            if (s.type === "ellipse") {
+              return (
+                <Ellipse
+                  key={s.id}
+                  {...s}
+                  stroke={s.color}
+                  draggable={activeTool === "select"}
+                  onMouseDown={(e) => {
+                    if (activeTool !== "select") return;
+                    e.cancelBubble = true;
+                    setSelectedId(s.id);
+                  }}
+                  onDragEnd={(e) => {
+                    const { x, y } = e.target.position();
+                    updateShapePosition(s.id, x, y);
+                  }}
+                  onTransformEnd={(e) => {
+                    const node = e.target;
+                    resizeShape(s.id, node.scaleX(), node.scaleY());
+                    node.scaleX(1);
+                    node.scaleY(1);
+                  }}
+                />
+              );
+            }
+
+            if (s.type === "line") {
+              return (
+                <Line
+                  key={s.id}
+                  id={s.id}
+                  points={s.points}
+                  stroke={s.color}
+                  draggable={activeTool === "select"}
+                  onMouseDown={(e) => {
+                    if (activeTool !== "select") return;
+                    e.cancelBubble = true;
+                    setSelectedId(s.id);
+                  }}
+                  onDragEnd={(e) => {
+                    const node = e.target;
+                    const { x, y } = node.position();
+                    updateShapePoints(s.id, x, y);
+                    node.position({ x: 0, y: 0 });
+                  }}
+                />
+              );
+            }
+
+            if (s.type === "arrow") {
+              return (
+                <Arrow
+                  key={s.id}
+                  id={s.id}
+                  points={s.points}
+                  stroke={s.color}
+                  fill={s.color}
+                  draggable={activeTool === "select"}
+                  onMouseDown={(e) => {
+                    if (activeTool !== "select") return;
+                    e.cancelBubble = true;
+                    setSelectedId(s.id);
+                  }}
+                  onDragEnd={(e) => {
+                    const node = e.target;
+                    const { x, y } = node.position();
+                    updateShapePoints(s.id, x, y);
+                    node.position({ x: 0, y: 0 });
+                  }}
+                />
+              );
+            }
+
+            return null;
+          })}
+
+          {/* DRAFT */}
+          {draft?.type === "rect" && (
+            <Rect
+              x={draft.width < 0 ? draft.x + draft.width : draft.x}
+              y={draft.height < 0 ? draft.y + draft.height : draft.y}
+              width={Math.abs(draft.width)}
+              height={Math.abs(draft.height)}
+              stroke="black"
+              dash={[4, 4]}
+            />
+          )}
+
+          {draft?.type === "ellipse" && (
             <Ellipse
               x={draft.x}
               y={draft.y}
@@ -153,22 +202,16 @@ const Canvas = () => {
             />
           )}
 
-          {selectedId && (
-            <Transformer
-              ref={transformerRef}
-              rotateEnabled={false}
-              listening={false}
-              enabledAnchors={[
-                "top-left",
-                "top-center",
-                "top-right",
-                "middle-left",
-                "middle-right",
-                "bottom-left",
-                "bottom-center",
-                "bottom-right",
-              ]}
+          {(draft?.type === "line" || draft?.type === "arrow") && (
+            <Line
+              points={draft.points}
+              stroke="black"
+              dash={[4, 4]}
             />
+          )}
+
+          {selectedId && (
+            <Transformer ref={transformerRef} rotateEnabled={false} />
           )}
         </Layer>
       </Stage>

@@ -19,6 +19,18 @@ export type Shape =
       radiusX: number;
       radiusY: number;
       color: string;
+    }
+  | {
+      id: string;
+      type: "line";
+      points: number[];
+      color: string;
+    }
+  | {
+      id: string;
+      type: "arrow";
+      points: number[];
+      color: string;
     };
 
 export function useShapes() {
@@ -28,9 +40,11 @@ export function useShapes() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // ───────── START DRAW ─────────
   const startDrawing = (x: number, y: number) => {
+    setIsDrawing(true);
+
     if (activeTool === "rect") {
-      setIsDrawing(true);
       setDraft({
         id: "draft",
         type: "rect",
@@ -43,34 +57,39 @@ export function useShapes() {
     }
 
     if (activeTool === "ellipse") {
-      setIsDrawing(true);
       setDraft({
         id: "draft",
         type: "ellipse",
-        x, // center
-        y, // center
+        x,
+        y,
         radiusX: 0,
         radiusY: 0,
         color: "black",
       });
     }
+
+    if (activeTool === "line" || activeTool === "arrow") {
+      setDraft({
+        id: "draft",
+        type: activeTool,
+        points: [x, y, x, y],
+        color: "black",
+      });
+    }
   };
 
+  // ───────── UPDATE DRAW ─────────
   const updateDrawing = (x: number, y: number) => {
     if (!draft) return;
 
     if (draft.type === "rect") {
-      const newWidth = (x - draft.x);
-      const newHeight =(y - draft.y);
-
       setDraft({
         ...draft,
-        width: newWidth,
-        height: newHeight,
+        width: x - draft.x,
+        height: y - draft.y,
       });
     }
 
-    // ELLIPSE: center-based
     if (draft.type === "ellipse") {
       setDraft({
         ...draft,
@@ -78,53 +97,94 @@ export function useShapes() {
         radiusY: Math.abs(y - draft.y),
       });
     }
+
+if (draft.type === "line" || draft.type === "arrow") {
+  const [x1, y1] = draft.points as [number,number];
+  setDraft({
+    ...draft,
+    points: [x1, y1, x, y],
+  });
+}
   };
 
+  // ───────── FINISH DRAW ─────────
   const finishDrawing = () => {
-  if (!isDrawing || !draft) return;
+    if (!isDrawing || !draft) return;
 
-  setShapes((prev) => {
-    if (draft.type === "ellipse") {
-      return [
-        ...prev,
-        {
-          ...draft,
-          id: crypto.randomUUID(),
-          radiusX: Math.max(5, draft.radiusX),
-          radiusY: Math.max(5, draft.radiusY),
-        },
-      ];
-    }
+    setShapes((prev) => {
+      // ELLIPSE
+      if (draft.type === "ellipse") {
+        return [
+          ...prev,
+          {
+            ...draft,
+            id: crypto.randomUUID(),
+            radiusX: Math.max(5, draft.radiusX),
+            radiusY: Math.max(5, draft.radiusY),
+          },
+        ];
+      }
 
-    // RECT — normalize from fixed anchor
-    const finalX =
-      draft.width < 0 ? draft.x + draft.width : draft.x;
-    const finalY =
-      draft.height < 0 ? draft.y + draft.height : draft.y;
+      // RECT (normalize)
+      if (draft.type === "rect") {
+        const finalX = draft.width < 0 ? draft.x + draft.width : draft.x;
+        const finalY = draft.height < 0 ? draft.y + draft.height : draft.y;
 
-    return [
-      ...prev,
-      {
-        ...draft,
-        id: crypto.randomUUID(),
-        x: finalX,
-        y: finalY,
-        width: Math.max(5, Math.abs(draft.width)),
-        height: Math.max(5, Math.abs(draft.height)),
-      },
-    ];
-  });
+        return [
+          ...prev,
+          {
+            ...draft,
+            id: crypto.randomUUID(),
+            x: finalX,
+            y: finalY,
+            width: Math.max(5, Math.abs(draft.width)),
+            height: Math.max(5, Math.abs(draft.height)),
+          },
+        ];
+      }
 
-  setDraft(null);
-  setIsDrawing(false);
-  setActiveTool("select");
-};
+      // LINE / ARROW
+      if (draft.type === "line" || draft.type === "arrow") {
+        const [x1, y1, x2, y2] = draft.points as [
+          number,
+          number,
+          number,
+          number,
+        ];
 
+        if (Math.hypot(x2 - x1, y2 - y1) < 3) return prev;
 
+        return [...prev, { ...draft, id: crypto.randomUUID() }];
+      }
+
+      return prev;
+    });
+
+    setDraft(null);
+    setIsDrawing(false);
+    setActiveTool("select");
+  };
+
+  // ───────── DRAG ─────────
   const updateShapePosition = (id: string, x: number, y: number) => {
     setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, x, y } : s)));
   };
 
+  const updateShapePoints = (id: string, dx: number, dy: number) => {
+    setShapes((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        if (s.type !== "line" && s.type !== "arrow") return s;
+
+        return {
+          ...s,
+          points: s.points.map((p, i) => (i % 2 === 0 ? p + dx : p + dy)),
+        };
+      }),
+    );
+  };
+
+  // ───────── RESIZE ─────────
   const resizeShape = (id: string, scaleX: number, scaleY: number) => {
     setShapes((prev) =>
       prev.map((shape) => {
@@ -160,9 +220,9 @@ export function useShapes() {
     updateDrawing,
     finishDrawing,
     updateShapePosition,
+    updateShapePoints,
     resizeShape,
     selectedId,
     setSelectedId,
-    setShapes,
   };
 }

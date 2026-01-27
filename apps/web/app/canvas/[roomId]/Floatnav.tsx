@@ -11,9 +11,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-
 interface Props {
-  activeTool: Tool; 
+  activeTool: Tool;
   setActiveTool: (tool: Tool) => void;
 }
 
@@ -43,22 +42,31 @@ const Floatnav = ({ activeTool, setActiveTool }: Props) => {
 
       <NavButton
         icon={<Circle size={19} />}
-        label="Circle"
+        label="Ellipse"
         shortcut="3"
         isActive={activeTool === "ellipse"}
-        onSelect={() => {
-          console.log("Circle Tool Selected via onSelect");
-          setActiveTool("ellipse");
-        }}
+        onSelect={() => setActiveTool("ellipse")}
       />
 
-      {/* Line Tools (future) */}
-      <NavButton icon={<Minus size={19} />} label="Line" shortcut="4" />
-      <NavButton icon={<ArrowRight size={19} />} label="Arrow" shortcut="5" />
+      <NavButton
+        icon={<Minus size={19} />}
+        label="Line"
+        shortcut="4"
+        isActive={activeTool === "line"}
+        onSelect={() => setActiveTool("line")}
+      />
+
+      <NavButton
+        icon={<ArrowRight size={19} />}
+        label="Arrow"
+        shortcut="5"
+        isActive={activeTool === "arrow"}
+        onSelect={() => setActiveTool("arrow")}
+      />
 
       <div className="w-[1px] h-5 bg-gray-200 mx-1" />
 
-      {/* Utilities */}
+      {/* Utilities (future) */}
       <NavButton icon={<Type size={19} />} label="Text" shortcut="6" />
       <NavButton icon={<Eraser size={19} />} label="Eraser" shortcut="0" />
     </nav>
@@ -82,13 +90,12 @@ const NavButton = ({
 }: NavBtnProps) => (
   <button
     onMouseDown={(e) => {
-      console.log(`NavButton MouseDown: ${label}`);
-      e.preventDefault();      
-      e.stopPropagation();     
-      onSelect?.();          
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect?.();
     }}
     onMouseUp={(e) => {
-      e.stopPropagation(); 
+      e.stopPropagation();
     }}
     className={`
       group relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150
