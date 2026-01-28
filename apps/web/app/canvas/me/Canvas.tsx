@@ -15,10 +15,16 @@ import { useShapes } from "./useShapes";
 import { useRef, useEffect } from "react";
 import { CanvasMode } from "./types";
 
+interface CanvasProps {
+  mode: CanvasMode;
+  onLoginClick: () => void;
+  onShareClick: () => void;
+}
 
-const Canvas = ({mode}:{mode:CanvasMode}) => {
+const Canvas = ({ mode, onLoginClick, onShareClick }: CanvasProps) => {
   const { width, height } = useWindowSize();
   const transformerRef = useRef<any>(null);
+
   const {
     shapes,
     draft,
@@ -46,9 +52,17 @@ const Canvas = ({mode}:{mode:CanvasMode}) => {
   }, [selectedId]);
 
   if (!width || !height) return null;
+
   return (
     <>
-      <Floatnav activeTool={activeTool} setActiveTool={setActiveTool} />
+      <Floatnav
+        activeTool={activeTool}
+        setActiveTool={setActiveTool}
+        mode={mode}
+        onLoginClick={onLoginClick}
+        onShareClick={onShareClick}
+      />
+
       <Stage
         width={width}
         height={height}
@@ -73,13 +87,11 @@ const Canvas = ({mode}:{mode:CanvasMode}) => {
         onMouseUp={finishDrawing}
       >
         <Layer>
-          {/* SHAPES */}
           {shapes.map((s) => {
             if (s.type === "rect") {
               return (
                 <Rect
                   key={s.id}
-                  {...s}
                   {...s}
                   stroke={s.color}
                   draggable={activeTool === "select"}
@@ -128,37 +140,12 @@ const Canvas = ({mode}:{mode:CanvasMode}) => {
               );
             }
 
-            if (s.type === "line") {
+            if (s.type === "line" || s.type === "arrow") {
               return (
                 <Line
                   key={s.id}
-                  id={s.id}
                   points={s.points}
                   stroke={s.color}
-                  draggable={activeTool === "select"}
-                  onMouseDown={(e) => {
-                    if (activeTool !== "select") return;
-                    e.cancelBubble = true;
-                    setSelectedId(s.id);
-                  }}
-                  onDragEnd={(e) => {
-                    const node = e.target;
-                    const { x, y } = node.position();
-                    updateShapePoints(s.id, x, y);
-                    node.position({ x: 0, y: 0 });
-                  }}
-                />
-              );
-            }
-
-            if (s.type === "arrow") {
-              return (
-                <Arrow
-                  key={s.id}
-                  id={s.id}
-                  points={s.points}
-                  stroke={s.color}
-                  fill={s.color}
                   draggable={activeTool === "select"}
                   onMouseDown={(e) => {
                     if (activeTool !== "select") return;
@@ -178,7 +165,6 @@ const Canvas = ({mode}:{mode:CanvasMode}) => {
             return null;
           })}
 
-          {/* DRAFT */}
           {draft?.type === "rect" && (
             <Rect
               x={draft.width < 0 ? draft.x + draft.width : draft.x}
@@ -202,11 +188,7 @@ const Canvas = ({mode}:{mode:CanvasMode}) => {
           )}
 
           {(draft?.type === "line" || draft?.type === "arrow") && (
-            <Line
-              points={draft.points}
-              stroke="black"
-              dash={[4, 4]}
-            />
+            <Line points={draft.points} stroke="black" dash={[4, 4]} />
           )}
 
           {selectedId && (

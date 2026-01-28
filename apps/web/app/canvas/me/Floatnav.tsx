@@ -10,16 +10,35 @@ import {
   Minus,
   ArrowRight,
 } from "lucide-react";
-
+import Canvas from "./Canvas";
+import { CanvasMode } from "./types";
 interface Props {
   activeTool: Tool;
   setActiveTool: (tool: Tool) => void;
+  mode: CanvasMode;
+  onLoginClick: () => void;
+  onShareClick: () => void;
 }
 
-const Floatnav = ({ activeTool, setActiveTool }: Props) => {
+const Floatnav = ({ activeTool, setActiveTool,mode, onLoginClick,onShareClick}: Props) => {
   return (
     <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-[#ffffff] border border-gray-200 p-1 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] select-none z-50">
-
+      {mode == "guest" && (
+        <NavButton
+          icon={<ArrowRight size={18} />}
+          label="Login to Save"
+          shortcut="⌘S"
+          onSelect={onLoginClick}
+        />
+      )}
+      {mode === "user" && (
+        <NavButton
+          icon={<ArrowRight size={18} />}
+          label="Share"
+          shortcut="⌘K"
+          onSelect={onShareClick}
+        />
+      )}
       {/* Selection Tool */}
       <NavButton
         icon={<MousePointer2 size={19} strokeWidth={2.5} />}
@@ -99,9 +118,10 @@ const NavButton = ({
     }}
     className={`
       group relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150
-      ${isActive
-        ? "bg-[#e0e0ff] text-[#6965db]"
-        : "hover:bg-[#f0f0f8] text-gray-600 hover:text-gray-900"
+      ${
+        isActive
+          ? "bg-[#e0e0ff] text-[#6965db]"
+          : "hover:bg-[#f0f0f8] text-gray-600 hover:text-gray-900"
       }
     `}
   >
