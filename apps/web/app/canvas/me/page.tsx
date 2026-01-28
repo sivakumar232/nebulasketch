@@ -1,32 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import AuthCanvas from "./AuthCanvas";
 
-import { useState } from "react";
-import Canvas from "./Canvas";
-import LoginModal from "../../components/Authpage"; // or LoginModal
-import { CanvasMode } from "./types";
+export default async function AuthCanvasPage() {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token");
 
-export default function PageCanvas() {
-  const [showLogin, setShowLogin] = useState(false);
+    if (!token) {
+        redirect("/canvas/guest");
+    }
 
-  return (
-    <>
-      <Canvas
-        mode="guest"
-        onLoginClick={() => setShowLogin(true)}
-        onShareClick={() => {
-          // later
-        }}
-      />
-
-      {showLogin && (
-        <LoginModal
-          onSuccess={() => {
-            setShowLogin(false);
-            // later: claim canvas + redirect
-          }}
-          onClose={() => setShowLogin(false)}
-        />
-      )}
-    </>
-  );
+    return <AuthCanvas />;
 }
