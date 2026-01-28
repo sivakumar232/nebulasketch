@@ -13,11 +13,12 @@ import { useWindowSize } from "../../hooks/useWindow";
 import Floatnav from "./Floatnav";
 import { useShapes } from "./useShapes";
 import { useRef, useEffect } from "react";
+import { CanvasMode } from "./types";
 
-const Canvas = () => {
+
+const Canvas = ({mode}:{mode:CanvasMode}) => {
   const { width, height } = useWindowSize();
   const transformerRef = useRef<any>(null);
-
   const {
     shapes,
     draft,
@@ -45,11 +46,9 @@ const Canvas = () => {
   }, [selectedId]);
 
   if (!width || !height) return null;
-
   return (
     <>
       <Floatnav activeTool={activeTool} setActiveTool={setActiveTool} />
-
       <Stage
         width={width}
         height={height}

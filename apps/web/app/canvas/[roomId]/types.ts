@@ -1,1 +1,0 @@
-export type Tool = "select" | "rect" |"ellipse"|"line"|"arrow"

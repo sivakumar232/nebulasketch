@@ -1,10 +1,7 @@
-import Image, { type ImageProps } from "next/image";
-
+import Canvas from "./canvas/me/Canvas";
 
 export default function Home() {
   return (
-    <div>
-      Landingpage....
-    </div> 
+    <Canvas mode="guest"/>
   );
 }
