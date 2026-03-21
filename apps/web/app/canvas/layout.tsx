@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Topbar from "../components/Topbar";
 import { Authpage } from "../components/Authpage";
 
 export default function CanvasLayout({
@@ -13,12 +12,7 @@ export default function CanvasLayout({
 
     return (
         <>
-            <Topbar
-                mode="guest"
-                onLoginClick={() => setShowLogin(true)}
-                onShareClick={() => { }}
-            />
-
+            {/* The canvas pages include their own TopBar — no layout-level nav here */}
             {children}
 
             {showLogin && (
