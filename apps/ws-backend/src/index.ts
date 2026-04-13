@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
-import { prismaClient as prisma } from "@repo/db/client";
+import { redis } from "@repo/backend-common/redis";
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -26,111 +26,40 @@ function verifyToken(token: string): string | null {
 }
 
 /**
- * Load all shapes for a given room slug from the database.
- * Returns them as an array compatible with the frontend Shape type.
+ * Load all shapes for a given room slug from Redis.
  */
 async function loadShapesForRoom(roomSlug: string): Promise<any[]> {
   try {
-    const room = await prisma.room.findUnique({
-      where: { slug: roomSlug },
-      include: {
-        canvas: {
-          include: { elements: true },
-        },
-      },
-    });
-
-    if (!room?.canvas) return [];
-
-    return room.canvas.elements.map((el: { id: number; type: string; createdBy: string | null; data: unknown }) => ({
-      id: String(el.id),
-      type: el.type,
-      createdBy: el.createdBy ?? "unknown",
-      ...(el.data as object),
-    }));
+    const rawShapes = await redis.hvals(`elements:${roomSlug}`);
+    return rawShapes.map(s => JSON.parse(s));
   } catch (err) {
-    console.error("Failed to load shapes:", err);
+    console.error("Failed to load shapes from Redis:", err);
     return [];
   }
 }
 
 /**
- * Persist a shape to the database for the given room slug.
- * If a shape with the same frontend ID (stored in data.frontendId) exists, update it.
+ * Persist a shape to Redis for the given room slug.
  */
 async function persistShape(roomSlug: string, shape: any): Promise<void> {
   try {
-    const room = await prisma.room.findUnique({
-      where: { slug: roomSlug },
-      include: { canvas: true },
-    });
-
-    if (!room) return;
-
-    // Auto-create Canvas if the room doesn't have one yet
-    let canvas = room.canvas;
-    if (!canvas) {
-      canvas = await prisma.canvas.create({
-        data: { roomId: room.id },
-      });
-    }
-
-    const { id: frontendId, type, createdBy, ...shapeData } = shape;
-
-    // Use frontendId stored in data for upsert-like behaviour
-    const existing = await prisma.element.findFirst({
-      where: {
-        canvasId: canvas.id,
-        data: { path: ["frontendId"], equals: frontendId },
-      },
-    });
-
-    if (existing) {
-      await prisma.element.update({
-        where: { id: existing.id },
-        data: {
-          type,
-          data: { frontendId, ...shapeData },
-        },
-      });
-    } else {
-      await prisma.element.create({
-        data: {
-          canvasId: canvas.id,
-          type,
-          createdBy: createdBy ?? null,
-          data: { frontendId, ...shapeData },
-        },
-      });
-    }
+    const shapeId = shape.id || `shape_${Date.now()}`;
+    await redis.hset(`elements:${roomSlug}`, shapeId, JSON.stringify(shape));
+    // Set TTL of 24 hours
+    await redis.expire(`elements:${roomSlug}`, 86400);
   } catch (err) {
-    console.error("Failed to persist shape:", err);
+    console.error("Failed to persist shape to Redis:", err);
   }
 }
 
 /**
- * Delete a shape by its frontend ID from the database for the given room slug.
+ * Delete a shape from Redis for the given room slug.
  */
-async function deleteShape(roomSlug: string, frontendId: string): Promise<void> {
+async function deleteShape(roomSlug: string, shapeId: string): Promise<void> {
   try {
-    const room = await prisma.room.findUnique({
-      where: { slug: roomSlug },
-      include: { canvas: true },
-    });
-    if (!room?.canvas) return;
-
-    const existing = await prisma.element.findFirst({
-      where: {
-        canvasId: room.canvas.id,
-        data: { path: ["frontendId"], equals: frontendId },
-      },
-    });
-
-    if (existing) {
-      await prisma.element.delete({ where: { id: existing.id } });
-    }
+    await redis.hdel(`elements:${roomSlug}`, shapeId);
   } catch (err) {
-    console.error("Failed to delete shape:", err);
+    console.error("Failed to delete shape from Redis:", err);
   }
 }
 
@@ -168,13 +97,6 @@ wss.on("connection", (ws, request) => {
       if (!user.rooms.includes(roomId)) {
         user.rooms.push(roomId);
       }
-
-      // Track presence in DB
-      await prisma.userPresence.upsert({
-        where: { userId_roomId: { userId: user.userId, roomId: parseInt(roomId) || 0 } },
-        update: { isActive: true, lastSeenAt: new Date() },
-        create: { userId: user.userId, roomId: parseInt(roomId) || 0, isActive: true },
-      }).catch(err => console.error("Presence upsert failed:", err));
 
       // Calculate room occupancy
       const roomUsers = users.filter(u => u.rooms.includes(roomId));
@@ -239,12 +161,6 @@ wss.on("connection", (ws, request) => {
             status: occupancy >= 2 ? "active" : "waiting"
           }));
         });
-
-        // Mark inactive in DB
-        prisma.userPresence.updateMany({
-          where: { userId: removedUser.userId, roomId: parseInt(roomId) || 0 },
-          data: { isActive: false, lastSeenAt: new Date() }
-        }).catch(err => console.error("Presence update on close failed:", err));
       }
     }
   });

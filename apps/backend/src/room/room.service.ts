@@ -1,5 +1,5 @@
-import { prismaClient as prisma } from "@repo/db/client";
 import { nanoid } from "nanoid";
+import { redis } from "@repo/backend-common/redis";
 
 function generateslug() {
     return nanoid(6);
@@ -7,58 +7,35 @@ function generateslug() {
 
 export const createroomService = {
     async create(name?: string) {
-        // Create the room and its canvas in one transaction
-        return prisma.room.create({
-            data: {
-                name: name || "New Room",
-                slug: generateslug(),
-                status: "waiting",
-                isPublic: true,
-                canvas: { create: {} }, // auto-create canvas
-            },
-            include: { canvas: true },
-        });
+        const slug = generateslug();
+        const roomData = {
+            id: Math.floor(Math.random() * 1000000).toString(),
+            name: name || "New Room",
+            slug,
+            status: "waiting",
+            createdAt: new Date().toISOString(),
+        };
+
+        await redis.hset(`room:${slug}`, roomData);
+        await redis.expire(`room:${slug}`, 86400); // 24h TTL
+
+        return roomData;
     },
 
     async getRoomBySlug(slug: string) {
-        return prisma.room.findUnique({
-            where: { slug },
-            include: {
-                _count: {
-                    select: { presences: { where: { isActive: true } } }
-                }
-            }
-        });
+        const room = await redis.hgetall(`room:${slug}`);
+        if (!room || Object.keys(room).length === 0) return null;
+        return room;
     }
-}
+};
 
 export const GetChatService = {
-    /**
-     * Fetch all elements (shapes) for a room by its slug.
-     * Returns elements mapped to the frontend Shape format.
-     */
     async getShapes(roomSlug: string) {
-        const room = await prisma.room.findUnique({
-            where: { slug: roomSlug },
-            include: {
-                canvas: {
-                    include: { elements: true },
-                },
-            },
-        });
-
-        if (!room?.canvas) return [];
-
-        return room.canvas.elements.map((el) => ({
-            id: String(el.id),
-            type: el.type,
-            createdBy: el.createdBy ?? "unknown",
-            ...(el.data as object),
-        }));
+        const shapes = await redis.hvals(`elements:${roomSlug}`);
+        return shapes.map((s) => JSON.parse(s));
     },
 
-    // Keep the old chat method signature for backwards compat (no-op until chat is implemented)
-    async chat(roomId: number) {
+    async chat(_roomId: number) {
         return [];
     }
-}
+};

@@ -13,29 +13,13 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  photo     String?
-  rooms     Room[]
-  element   Element[]
-  presences UserPresence[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model Room {
   id        Int      @id @default(autoincrement())
   slug      String   @unique
   name      String
-  adminId   String?
-  admin     User?     @relation(fields: [adminId], references: [id])
   canvas     Canvas?
   status     String   @default("waiting") // waiting, active
   isPublic   Boolean  @default(true)
-  presences  UserPresence[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -52,27 +36,12 @@ model Canvas {
 model Element {
   id        Int      @id  @default(autoincrement())
   canvasId  String      
-  canvas    Canvas   @relation(fields: [canvasId],references: [id])
+  canvas    Canvas   @relation(fields: [canvasId],references: [id], onDelete: Cascade)
   type      String
   data      Json
-  createdBy  String?
-  creator    User?      @relation(fields: [createdBy],references: [id])
+  createdBy  String?    // Store name or ID as string
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([canvasId]) 
-}
-
-model UserPresence {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roomId      Int
-  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  cursor      Json?    // {x, y}
-  isActive    Boolean  @default(true)
-  lastSeenAt  DateTime @default(now())
-  
-  @@unique([userId, roomId])
-  @@index([roomId, isActive])
 }

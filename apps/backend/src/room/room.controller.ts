@@ -38,7 +38,6 @@ export const joinRoom = async (req: Request, res: Response) => {
             slug: room.slug,
             name: room.name,
             status: room.status,
-            playerCount: room._count.presences,
         });
     } catch (error) {
         console.error("Join room error:", error);

@@ -1,11 +1,84 @@
 @import "tailwindcss";
 
-/* Optional custom theme */
-@theme {
-  --color-primary: oklch(65% 0.2 240);
+:root {
+  --ink: #0a0a0a;
+  --paper: #f5f0e8;
+  --accent: #ff4d00;
+  --muted: #888;
+  --border: #1a1a1a;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-sans: 'Space Grotesk', sans-serif;
 }
 
-/* Or classic directives if you prefer */
-/* @tailwind base;
-@tailwind components;
-@tailwind utilities; */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.retro-border {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.retro-border-sm {
+  border: 1.5px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.retro-btn {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: all 0.1s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.retro-btn:hover {
+  box-shadow: 5px 5px 0 var(--ink);
+  transform: translate(-1px, -1px);
+}
+
+.retro-btn:active {
+  box-shadow: 1px 1px 0 var(--ink);
+  transform: translate(2px, 2px);
+}
+
+.retro-btn-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.retro-btn-accent {
+  background: var(--accent);
+  color: #fff;
+}
+
+.retro-input {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  outline: none;
+  transition: box-shadow 0.1s;
+}
+
+.retro-input:focus {
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
