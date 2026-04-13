@@ -21,6 +21,7 @@ model User {
   photo     String?
   rooms     Room[]
   element   Element[]
+  presences UserPresence[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -32,6 +33,9 @@ model Room {
   adminId   String?
   admin     User?     @relation(fields: [adminId], references: [id])
   canvas     Canvas?
+  status     String   @default("waiting") // waiting, active
+  isPublic   Boolean  @default(true)
+  presences  UserPresence[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -44,6 +48,7 @@ model Canvas {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 model Element {
   id        Int      @id  @default(autoincrement())
   canvasId  String      
@@ -56,5 +61,18 @@ model Element {
   updatedAt DateTime @updatedAt
   
   @@index([canvasId]) 
+}
 
+model UserPresence {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId      Int
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  cursor      Json?    // {x, y}
+  isActive    Boolean  @default(true)
+  lastSeenAt  DateTime @default(now())
+  
+  @@unique([userId, roomId])
+  @@index([roomId, isActive])
 }

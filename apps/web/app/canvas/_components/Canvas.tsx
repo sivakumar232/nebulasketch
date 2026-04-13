@@ -15,6 +15,8 @@ import Floatnav from "./Floatnav";
 import { useShapes } from "./useShapes";
 import { useRef, useEffect } from "react";
 import { CanvasMode } from "./types";
+import { Users, Lock, Loader2, Copy, Check } from "lucide-react";
+import { useState } from "react";
 
 import TopBar from "./TopBar";
 import { useGuestIdentity } from "../../hooks/useGuestIdentity";
@@ -48,7 +50,19 @@ const Canvas = ({}: CanvasProps) => {
     setSelectedId,
     eraseShape,
     isConnected,
+    playerCount,
+    roomStatus,
   } = useShapes(roomSlug, identity?.guestId);
+
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(roomSlug);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const isBlocked = roomStatus === "waiting";
 
 
   useEffect(() => {
@@ -96,6 +110,8 @@ const Canvas = ({}: CanvasProps) => {
           const clickedOnEmpty = e.target === stage;
 
           if (clickedOnEmpty) setSelectedId(null);
+
+          if (isBlocked) return;
 
           if (clickedOnEmpty && activeTool !== "select") {
             const pos = stage.getPointerPosition();
@@ -311,6 +327,59 @@ const Canvas = ({}: CanvasProps) => {
         activeTool={activeTool}
         setActiveTool={setActiveTool}
       />
+
+      {/* Blocking Overlay */}
+      {isBlocked && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/40 backdrop-blur-[2px] flex items-center justify-center p-6">
+          <div className="bg-white/90 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl max-w-md w-full text-center space-y-6 transform animate-in fade-in zoom-in duration-300">
+            <div className="relative mx-auto w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center">
+              <Users className="text-indigo-600 w-10 h-10" />
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white">
+                 <Loader2 className="text-white w-3 h-3 animate-spin" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold text-slate-900">Waiting for Players</h3>
+              <p className="text-slate-600">
+                Join with a teammate to start sketching. The canvas will unlock automatically.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+              <div className="text-left">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Room Code</p>
+                <code className="text-lg font-mono font-bold text-indigo-600">{roomSlug}</code>
+              </div>
+              <button 
+                onClick={copyCode}
+                className="bg-white hover:bg-slate-50 border border-slate-200 p-2 rounded-xl shadow-sm transition-all text-slate-600"
+              >
+                {copied ? <Check className="text-green-500 w-5 h-5" /> : <Copy className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center space-x-2 text-sm font-medium text-slate-500">
+               <div className="flex -space-x-2 mr-2">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white flex items-center justify-center text-[10px] text-white font-bold">ME</div>
+                  <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center">
+                    <Users className="w-4 h-4 text-slate-400" />
+                  </div>
+               </div>
+               <span>{playerCount}/2 Players Joined</span>
+            </div>
+
+            <div className="pt-2">
+               <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-full transition-all duration-500 ease-out" 
+                    style={{ width: `${(playerCount / 2) * 100}%` }}
+                  />
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

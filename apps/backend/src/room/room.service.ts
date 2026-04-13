@@ -1,29 +1,33 @@
 import { prismaClient as prisma } from "@repo/db/client";
 import { nanoid } from "nanoid";
 
-function generateslug(name: string) {
-    return (
-        name
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "") +
-        "-" +
-        nanoid(6)
-    )
+function generateslug() {
+    return nanoid(6);
 }
 
 export const createroomService = {
-    async create(name: string, adminId?: string) {
+    async create(name?: string) {
         // Create the room and its canvas in one transaction
         return prisma.room.create({
             data: {
-                name,
-                slug: generateslug(name),
-                adminId: adminId || null,
+                name: name || "New Room",
+                slug: generateslug(),
+                status: "waiting",
+                isPublic: true,
                 canvas: { create: {} }, // auto-create canvas
             },
             include: { canvas: true },
+        });
+    },
+
+    async getRoomBySlug(slug: string) {
+        return prisma.room.findUnique({
+            where: { slug },
+            include: {
+                _count: {
+                    select: { presences: { where: { isActive: true } } }
+                }
+            }
         });
     }
 }

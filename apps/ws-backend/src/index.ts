@@ -169,6 +169,26 @@ wss.on("connection", (ws, request) => {
         user.rooms.push(roomId);
       }
 
+      // Track presence in DB
+      await prisma.userPresence.upsert({
+        where: { userId_roomId: { userId: user.userId, roomId: parseInt(roomId) || 0 } },
+        update: { isActive: true, lastSeenAt: new Date() },
+        create: { userId: user.userId, roomId: parseInt(roomId) || 0, isActive: true },
+      }).catch(err => console.error("Presence upsert failed:", err));
+
+      // Calculate room occupancy
+      const roomUsers = users.filter(u => u.rooms.includes(roomId));
+      const occupancy = roomUsers.length;
+
+      // Broadcast occupancy update to all in room
+      roomUsers.forEach(u => {
+        u.ws.send(JSON.stringify({
+          type: "player_count_update",
+          count: occupancy,
+          status: occupancy >= 2 ? "active" : "waiting"
+        }));
+      });
+
       // Send existing shapes to the joining client
       const shapes = await loadShapesForRoom(roomId);
       ws.send(JSON.stringify({ type: "init_shapes", shapes }));
@@ -199,9 +219,34 @@ wss.on("connection", (ws, request) => {
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close", async () => {
     const index = users.findIndex((u) => u.ws === ws);
-    if (index !== -1) users.splice(index, 1);
+    if (index !== -1) {
+      const removedUser = users[index];
+      users.splice(index, 1);
+
+      if (!removedUser) return;
+
+      // Update occupancy for all rooms this user was in
+      for (const roomId of removedUser.rooms) {
+        const roomUsers = users.filter(u => u.rooms.includes(roomId));
+        const occupancy = roomUsers.length;
+
+        roomUsers.forEach(u => {
+          u.ws.send(JSON.stringify({
+            type: "player_count_update",
+            count: occupancy,
+            status: occupancy >= 2 ? "active" : "waiting"
+          }));
+        });
+
+        // Mark inactive in DB
+        prisma.userPresence.updateMany({
+          where: { userId: removedUser.userId, roomId: parseInt(roomId) || 0 },
+          data: { isActive: false, lastSeenAt: new Date() }
+        }).catch(err => console.error("Presence update on close failed:", err));
+      }
+    }
   });
 });
 

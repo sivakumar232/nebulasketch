@@ -4,9 +4,8 @@ import { createroomService, GetChatService } from "./room.service";
 export const createroom = async (req: Request, res: Response) => {
     try {
         const { name } = req.body;
-        const adminId = req.userId; // From auth middleware (might be undefined)
 
-        const room = await createroomService.create(name, adminId);
+        const room = await createroomService.create(name);
         return res.status(201).json(room);
     } catch (error) {
         console.error("Create room error:", error);
@@ -22,5 +21,27 @@ export const getchat = async (req: Request, res: Response) => {
     } catch (e) {
         console.error("Get shapes error:", e);
         return res.status(500).json({ message: "Failed to load shapes" });
+    }
+};
+
+export const joinRoom = async (req: Request, res: Response) => {
+    try {
+        const { slug } = req.params;
+        const room = await createroomService.getRoomBySlug(String(slug));
+
+        if (!room) {
+            return res.status(404).json({ message: "Room not found" });
+        }
+
+        return res.status(200).json({
+            id: room.id,
+            slug: room.slug,
+            name: room.name,
+            status: room.status,
+            playerCount: room._count.presences,
+        });
+    } catch (error) {
+        console.error("Join room error:", error);
+        return res.status(500).json({ message: "Failed to join room" });
     }
 };

@@ -47,6 +47,8 @@ export function useShapes(roomId?: string, guestId?: string) {
   const [draft, setDraft] = useState<Shape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [playerCount, setPlayerCount] = useState(0);
+  const [roomStatus, setRoomStatus] = useState<"waiting" | "active">("waiting");
 
   // Keep a stable ref for sendMessage so we can call it outside of setShapes
   const sendMessageRef = useRef<((payload: any) => void) | null>(null);
@@ -71,6 +73,9 @@ export function useShapes(roomId?: string, guestId?: string) {
       } else if (payload.type === "init_shapes") {
         // Server sends initial shapes on join
         setShapes(payload.shapes as Shape[]);
+      } else if (payload.type === "player_count_update") {
+        setPlayerCount(payload.count);
+        setRoomStatus(payload.status);
       }
     }
   );
@@ -289,5 +294,7 @@ export function useShapes(roomId?: string, guestId?: string) {
     setSelectedId,
     eraseShape,
     isConnected,
+    playerCount,
+    roomStatus,
   };
 }
