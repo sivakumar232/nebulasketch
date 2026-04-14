@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 export function useWebSocket(
     roomId: string,
     guestId: string,
+    guestName: string,
     onMessage: (payload: any) => void
 ) {
     const socketRef = useRef<WebSocket | null>(null);
@@ -18,36 +19,54 @@ export function useWebSocket(
     });
 
     useEffect(() => {
-        if (!roomId || !guestId) return;
+        // CRITICAL: do not connect if any identity field is missing
+        if (!roomId || !guestId || !guestName || guestName === "Guest") return;
 
+        console.log("[WS] Connecting with", { roomId, guestId, guestName });
+
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
         const socket = new WebSocket(
-            `ws://localhost:8080?token=guest&userId=${guestId}`
+            `${wsUrl}?token=guest&userId=${guestId}`
         );
         socketRef.current = socket;
 
         socket.onopen = () => {
+            console.log("[WS] Connected, sending join_room");
             setIsConnected(true);
-            socket.send(JSON.stringify({ type: "join_room", roomId }));
+            socket.send(JSON.stringify({ type: "join_room", roomId, guestName }));
         };
 
         socket.onmessage = (event) => {
             try {
                 const payload = JSON.parse(event.data);
+                console.log("[WS] Received:", payload.type, payload);
                 onMessageRef.current(payload);
             } catch (e) {
-                console.error("Failed to parse WS message", e);
+                console.error("[WS] Failed to parse message", e);
             }
         };
 
-        socket.onclose = () => {
-            setIsConnected(false);
+        let intentionalClose = false;
+
+        socket.onerror = () => {
+            if (!intentionalClose) {
+                console.warn("[WS] Connection error — will retry on next mount.");
+            }
+        };
+
+        socket.onclose = (ev) => {
+            if (!intentionalClose) {
+                console.log("[WS] Disconnected:", ev.code, ev.reason);
+                setIsConnected(false);
+            }
         };
 
         return () => {
+            intentionalClose = true;
             socket.close();
         };
-        // Only reconnect when the room or guest actually changes
-    }, [roomId, guestId]);
+        // Reconnect when room, guest identity, or name changes
+    }, [roomId, guestId, guestName]);
 
     const sendMessage = (payload: any) => {
         if (socketRef.current?.readyState === WebSocket.OPEN) {

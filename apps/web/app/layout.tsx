@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Real-time collaborative drawing. No signup needed.",
 };
 
+import { IdentityProvider } from "./providers/IdentityContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,7 +23,11 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <IdentityProvider>
+          {children}
+        </IdentityProvider>
+      </body>
     </html>
   );
 }

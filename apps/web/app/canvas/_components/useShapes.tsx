@@ -11,6 +11,7 @@ export type Shape =
       width: number;
       height: number;
       color: string;
+      strokeWidth: number;
       createdBy: string;
     }
   | {
@@ -21,13 +22,15 @@ export type Shape =
       radiusX: number;
       radiusY: number;
       color: string;
+      strokeWidth: number;
       createdBy: string;
     }
   | {
       id: string;
-      type: "line" | "arrow";
+      type: "line" | "arrow" | "eraser_line";
       points: number[];
       color: string;
+      strokeWidth: number;
       createdBy: string;
     }
   | {
@@ -41,21 +44,27 @@ export type Shape =
       createdBy: string;
     };
 
-export function useShapes(roomId?: string, guestId?: string) {
+export function useShapes(roomId?: string, guestId?: string, guestName?: string) {
   const [shapes, setShapes] = useState<Shape[]>([]);
-  const [activeTool, setActiveTool] = useState<Tool>("select");
+  const [activeTool, setActiveTool] = useState<Tool>("line"); // default to pen
+  const [strokeColor, setStrokeColor] = useState("#000000");
+  const [strokeWidth, setStrokeWidth] = useState(4);
   const [draft, setDraft] = useState<Shape | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [playerCount, setPlayerCount] = useState(0);
+  const [users, setUsers] = useState<{ userId: string; name: string }[]>([]);
   const [roomStatus, setRoomStatus] = useState<"waiting" | "active">("waiting");
+  const [remoteDrafts, setRemoteDrafts] = useState<Record<string, Shape>>({}); // For live drawing sync
 
   // Keep a stable ref for sendMessage so we can call it outside of setShapes
   const sendMessageRef = useRef<((payload: any) => void) | null>(null);
+  // Throttle ref to avoid flooding the WS with draft events on every mouse move
+  const lastDraftSentAt = useRef<number>(0);
 
   const { sendMessage, isConnected } = useWebSocket(
     roomId || "",
     guestId || "",
+    guestName || "",  // empty string triggers the guard — no "Guest" fallback
     (payload) => {
       if (payload.type === "draw") {
         setShapes((prev) => {
@@ -68,14 +77,47 @@ export function useShapes(roomId?: string, guestId?: string) {
           }
           return [...prev, shape];
         });
+        
+        // Remove the live draft since the final shape is now committed
+        if (payload.senderId) {
+           setRemoteDrafts(prev => {
+             const updated = { ...prev };
+             delete updated[payload.senderId];
+             return updated;
+           });
+        }
+      } else if (payload.type === "draft_draw") {
+        // Update the live draft for this specific user
+        if (payload.senderId && payload.shape) {
+           setRemoteDrafts(prev => ({ ...prev, [payload.senderId]: payload.shape as Shape }));
+        } else if (payload.senderId && !payload.shape) {
+           // If sent without shape, it means they stopped drawing
+           setRemoteDrafts(prev => {
+             const updated = { ...prev };
+             delete updated[payload.senderId];
+             return updated;
+           });
+        }
       } else if (payload.type === "delete_shape") {
         setShapes((prev) => prev.filter((s) => s.id !== payload.shapeId));
       } else if (payload.type === "init_shapes") {
-        // Server sends initial shapes on join
         setShapes(payload.shapes as Shape[]);
+      } else if (payload.type === "user_list_update") {
+        // New format: full user objects with names — deduplicate by userId
+        const raw: { userId: string; name: string }[] = payload.users || [];
+        const unique = Array.from(
+          new Map(raw.map(u => [u.userId, u])).values()
+        );
+        console.log("[Shapes] user_list_update:", unique);
+        setUsers(unique);
+        if (payload.status) setRoomStatus(payload.status);
       } else if (payload.type === "player_count_update") {
-        setPlayerCount(payload.count);
-        setRoomStatus(payload.status);
+        // Legacy format: only count + status, no names
+        // Request a fresh user list by rejoining
+        console.log("[Shapes] player_count_update (legacy):", payload);
+        if (payload.status) setRoomStatus(payload.status);
+      } else if (payload.type === "game_started") {
+        setRoomStatus("active");
       }
     }
   );
@@ -85,55 +127,74 @@ export function useShapes(roomId?: string, guestId?: string) {
     sendMessageRef.current = sendMessage;
   });
 
+  // Broadcast live draft — only fires when actively drawing, throttled to ~30fps
+  useEffect(() => {
+    if (!isDrawing || !draft) return; // No-op when not drawing
+    const now = Date.now();
+    if (now - lastDraftSentAt.current < 32) return; // ~30fps throttle
+    lastDraftSentAt.current = now;
+    sendMessageRef.current?.({ type: "draft_draw", roomId, shape: draft });
+  }, [draft, isDrawing, roomId]);
+
+  const startGame = () => {
+    sendMessage({ type: "start_game", roomId });
+  };
+
   // ───────── START DRAW ─────────
+  const draftIdRef = useRef<string>("draft_" + crypto.randomUUID());
   const startDrawing = (x: number, y: number) => {
     setIsDrawing(true);
+    // Assign a fresh ID so remote peers can track our stroke correctly
+    draftIdRef.current = "draft_" + crypto.randomUUID();
 
     if (activeTool === "rect") {
       setDraft({
-        id: "draft",
+        id: draftIdRef.current,
         type: "rect",
         x,
         y,
         width: 0,
         height: 0,
-        color: "black",
+        color: strokeColor,
+        strokeWidth: strokeWidth,
         createdBy: "draft",
       });
     }
 
     if (activeTool === "ellipse") {
       setDraft({
-        id: "draft",
+        id: draftIdRef.current,
         type: "ellipse",
         x,
         y,
         radiusX: 0,
         radiusY: 0,
-        color: "black",
+        color: strokeColor,
+        strokeWidth: strokeWidth,
         createdBy: "draft",
       });
     }
 
-    if (activeTool === "line" || activeTool === "arrow") {
+    if (activeTool === "line" || activeTool === "arrow" || activeTool === "eraser") {
       setDraft({
-        id: "draft",
-        type: activeTool,
-        points: [x, y, x, y],
-        color: "black",
+        id: draftIdRef.current,
+        type: activeTool === "eraser" ? "eraser_line" : activeTool,
+        points: [x, y],
+        color: strokeColor,
+        strokeWidth: strokeWidth,
         createdBy: "draft",
       });
     }
 
     if (activeTool === "text") {
       setDraft({
-        id: "draft",
+        id: draftIdRef.current,
         type: "text",
         x,
         y,
         text: "Text",
         fontSize: 20,
-        color: "black",
+        color: strokeColor,
         createdBy: "draft",
       });
     }
@@ -159,11 +220,10 @@ export function useShapes(roomId?: string, guestId?: string) {
       });
     }
 
-    if (draft.type === "line" || draft.type === "arrow") {
-      const [x1, y1] = draft.points as [number, number];
+    if (draft.type === "line" || draft.type === "arrow" || draft.type === "eraser_line") {
       setDraft({
         ...draft,
-        points: [x1, y1, x, y],
+        points: draft.points.concat([x, y]),
       });
     }
   };
@@ -196,9 +256,10 @@ export function useShapes(roomId?: string, guestId?: string) {
         width: Math.max(5, Math.abs(draft.width)),
         height: Math.max(5, Math.abs(draft.height)),
       };
-    } else if (draft.type === "line" || draft.type === "arrow") {
+    } else if (draft.type === "line" || draft.type === "arrow" || draft.type === "eraser_line") {
       const [x1, y1, x2, y2] = draft.points as [number, number, number, number];
-      if (Math.hypot(x2 - x1, y2 - y1) < 3) {
+      // Only abort tiny strokes if it's NOT an eraser (tiny eraser clicks should still work as dots)
+      if (Math.hypot(x2 - x1, y2 - y1) < 3 && draft.type !== "eraser_line") {
         setDraft(null);
         setIsDrawing(false);
         setActiveTool("select");
@@ -218,7 +279,12 @@ export function useShapes(roomId?: string, guestId?: string) {
 
     setDraft(null);
     setIsDrawing(false);
-    setActiveTool("select");
+    // Clear our live draft from remote peers' screens
+    sendMessageRef.current?.({ type: "draft_draw", roomId, shape: null, senderId: guestId });
+    // Don't auto-switch back to select if using continuous drawing tools
+    if (activeTool === "rect" || activeTool === "ellipse" || activeTool === "text") {
+        setActiveTool("select");
+    }
   };
 
   // ───────── DRAG ─────────
@@ -234,8 +300,9 @@ export function useShapes(roomId?: string, guestId?: string) {
   const updateShapePoints = (id: string, dx: number, dy: number) => {
     setShapes((prev) => {
       const newShapes = prev.map((s) => {
+         // lines are the only ones with points now in this context
         if (s.id !== id) return s;
-        if (s.type !== "line" && s.type !== "arrow") return s;
+        if (!("points" in s)) return s;
         return {
           ...s,
           points: s.points.map((p, i) => (i % 2 === 0 ? p + dx : p + dy)),
@@ -282,8 +349,13 @@ export function useShapes(roomId?: string, guestId?: string) {
   return {
     shapes,
     draft,
+    remoteDrafts,
     activeTool,
     setActiveTool,
+    strokeColor,
+    setStrokeColor,
+    strokeWidth,
+    setStrokeWidth,
     startDrawing,
     updateDrawing,
     finishDrawing,
@@ -294,7 +366,8 @@ export function useShapes(roomId?: string, guestId?: string) {
     setSelectedId,
     eraseShape,
     isConnected,
-    playerCount,
+    users,
     roomStatus,
+    startGame,
   };
 }
