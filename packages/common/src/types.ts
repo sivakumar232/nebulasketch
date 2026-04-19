@@ -21,3 +21,21 @@ export const CreateRoomSchema = z.object({
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type SigninInput = z.infer<typeof SigninSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
+
+export type GameState = "lobby" | "starting" | "picking_word" | "drawing" | "round_over" | "game_over";
+
+export interface RoomGameData {
+    roomId: string;
+    state: GameState;
+    round: number;
+    maxRounds: number;
+    drawOrder: string[];
+    drawerIndex: number;
+    currentDrawerId: string | null;
+    wordOptions: string[];
+    currentWord: string | null;
+    timerEndsAt: number | null;
+    scores: Record<string, number>;
+    guessedCorrectly: string[];
+    lastGuessInfo?: { userId: string; name: string; isCorrect: boolean };
+}

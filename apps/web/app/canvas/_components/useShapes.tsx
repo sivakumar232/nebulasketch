@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Tool } from "./types";
 import { useWebSocket } from "../../hooks/useWebSocket";
+import { RoomGameData } from "../../../../../packages/common/src/types";
 
 export type Shape =
   | {
@@ -55,6 +56,9 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
   const [users, setUsers] = useState<{ userId: string; name: string }[]>([]);
   const [roomStatus, setRoomStatus] = useState<"waiting" | "active">("waiting");
   const [remoteDrafts, setRemoteDrafts] = useState<Record<string, Shape>>({}); // For live drawing sync
+  const [gameData, setGameData] = useState<RoomGameData | null>(null);
+  const [messages, setMessages] = useState<{ userId: string; name: string; text: string; system?: boolean; type?: string }[]>([]);
+  const [adminId, setAdminId] = useState<string | null>(null);
 
   // Keep a stable ref for sendMessage so we can call it outside of setShapes
   const sendMessageRef = useRef<((payload: any) => void) | null>(null);
@@ -67,7 +71,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     guestName || "",  // empty string triggers the guard — no "Guest" fallback
     (payload) => {
       if (payload.type === "draw") {
-        setShapes((prev) => {
+        setShapes((prev: Shape[]) => {
           const shape = payload.shape as Shape;
           const index = prev.findIndex((s) => s.id === shape.id);
           if (index !== -1) {
@@ -80,7 +84,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
         
         // Remove the live draft since the final shape is now committed
         if (payload.senderId) {
-           setRemoteDrafts(prev => {
+           setRemoteDrafts((prev: Record<string, Shape>) => {
              const updated = { ...prev };
              delete updated[payload.senderId];
              return updated;
@@ -89,17 +93,17 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
       } else if (payload.type === "draft_draw") {
         // Update the live draft for this specific user
         if (payload.senderId && payload.shape) {
-           setRemoteDrafts(prev => ({ ...prev, [payload.senderId]: payload.shape as Shape }));
+           setRemoteDrafts((prev: Record<string, Shape>) => ({ ...prev, [payload.senderId]: payload.shape as Shape }));
         } else if (payload.senderId && !payload.shape) {
            // If sent without shape, it means they stopped drawing
-           setRemoteDrafts(prev => {
+           setRemoteDrafts((prev: Record<string, Shape>) => {
              const updated = { ...prev };
              delete updated[payload.senderId];
              return updated;
            });
         }
       } else if (payload.type === "delete_shape") {
-        setShapes((prev) => prev.filter((s) => s.id !== payload.shapeId));
+        setShapes((prev: Shape[]) => prev.filter((s) => s.id !== payload.shapeId));
       } else if (payload.type === "init_shapes") {
         setShapes(payload.shapes as Shape[]);
       } else if (payload.type === "user_list_update") {
@@ -111,6 +115,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
         console.log("[Shapes] user_list_update:", unique);
         setUsers(unique);
         if (payload.status) setRoomStatus(payload.status);
+        if (payload.adminId) setAdminId(payload.adminId);
       } else if (payload.type === "player_count_update") {
         // Legacy format: only count + status, no names
         // Request a fresh user list by rejoining
@@ -118,6 +123,20 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
         if (payload.status) setRoomStatus(payload.status);
       } else if (payload.type === "game_started") {
         setRoomStatus("active");
+      } else if (payload.type === "room_info") {
+        setAdminId(payload.adminId);
+      } else if (payload.type === "game_state_update") {
+        setGameData(payload.data as RoomGameData);
+        if (payload.data.state !== "lobby") setRoomStatus("active");
+      } else if (payload.type === "clear_canvas") {
+        setShapes([]);
+      } else if (payload.type === "chat") {
+        setMessages((prev) => [...prev, { userId: payload.senderId || "system", name: payload.name || (payload.system ? "System" : "Unknown"), text: payload.text, system: payload.system }]);
+      } else if (payload.type === "correct_guess") {
+        setMessages((prev) => [...prev, { userId: payload.data.userId, name: payload.data.name, text: "guessed the word correctly!", system: true, type: "correct" }]);
+        if (gameData) setGameData({ ...gameData, scores: payload.data.scores });
+      } else if (payload.type === "close_guess") {
+        setMessages((prev) => [...prev, { userId: payload.data.userId, name: payload.data.name, text: "is close!", system: true, type: "close" }]);
       }
     }
   );
@@ -368,6 +387,11 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     isConnected,
     users,
     roomStatus,
+    adminId,
     startGame,
+    gameData,
+    messages,
+    sendChatMessage: (text: string) => sendMessage({ type: "chat", text }),
+    pickWord: (word: string) => sendMessage({ type: "pick_word", word }),
   };
 }

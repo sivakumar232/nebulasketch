@@ -24,7 +24,7 @@ export default function RoomLobby({ forcedSlug }: { forcedSlug?: string }) {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/room/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "New Drawing" }),
+        body: JSON.stringify({ name: "New Drawing", adminId: identity?.guestId }),
       });
       const data = await res.json();
       if (data.slug) {

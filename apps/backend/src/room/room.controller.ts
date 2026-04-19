@@ -3,9 +3,9 @@ import { createroomService, GetChatService } from "./room.service";
 
 export const createroom = async (req: Request, res: Response) => {
     try {
-        const { name } = req.body;
+        const { name, adminId } = req.body;
 
-        const room = await createroomService.create(name);
+        const room = await createroomService.create(name, adminId);
         return res.status(201).json(room);
     } catch (error) {
         console.error("Create room error:", error);

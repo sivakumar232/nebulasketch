@@ -6,12 +6,13 @@ function generateslug() {
 }
 
 export const createroomService = {
-    async create(name?: string) {
+    async create(name?: string, adminId?: string) {
         const slug = generateslug();
         const roomData = {
             id: Math.floor(Math.random() * 1000000).toString(),
             name: name || "New Room",
             slug,
+            adminId: adminId || null,
             status: "waiting",
             createdAt: new Date().toISOString(),
         };

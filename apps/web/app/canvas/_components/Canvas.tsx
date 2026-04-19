@@ -13,7 +13,10 @@ import { useWindowSize } from "../../hooks/useWindow";
 import Floatnav from "./Floatnav";
 import { useShapes } from "./useShapes";
 import { useRef, useEffect, useState } from "react";
-import { Users, Loader2, Copy, Check, ArrowRight } from "lucide-react";
+import { Tool } from "./types";
+import { useWebSocket } from "../../hooks/useWebSocket";
+import { RoomGameData } from "../../../../../packages/common/src/types";
+import { Users, Loader2, Copy, Check } from "lucide-react";
 import TopBar from "./TopBar";
 import { useGuestIdentity } from "../../hooks/useGuestIdentity";
 import { useParams } from "next/navigation";
@@ -53,7 +56,12 @@ const Canvas = ({}: CanvasProps) => {
     isConnected,
     users,
     roomStatus,
+    adminId,
     startGame,
+    gameData,
+    messages,
+    sendChatMessage,
+    pickWord,
   } = useShapes(roomSlug, identity?.guestId, identity?.name || undefined);
 
   const [copied, setCopied] = useState(false);
@@ -64,7 +72,12 @@ const Canvas = ({}: CanvasProps) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isBlocked = roomStatus === "waiting";
+  // Block drawing if:
+  // 1. Not connected
+  // 2. Room is waiting (less than 2 players)
+  // 3. Game is in lobby (waiting for start)
+  // 4. Game is in transition (starting countdown)
+  const isBlocked = !isConnected || roomStatus === "waiting" || !gameData || gameData.state === "lobby" || gameData.state === "starting";
 
   useEffect(() => {
     if (!transformerRef.current || !selectedId) return;
@@ -120,7 +133,9 @@ const Canvas = ({}: CanvasProps) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black truncate uppercase tracking-tight">{u.name}</p>
-                    <p className="text-[9px] font-bold text-[#0a0a0a]/40 tracking-widest uppercase">Member</p>
+                    <p className="text-[9px] font-bold text-[#0a0a0a]/40 tracking-widest uppercase">
+                       {u.userId === adminId ? "Room Host" : "Member"}
+                    </p>
                   </div>
                   {u.userId === identity?.guestId && (
                     <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
@@ -157,7 +172,7 @@ const Canvas = ({}: CanvasProps) => {
             <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-50" />
             
             <Stage
-              width={width > 1200 ? 800 : width - 100} // Simple dynamic sizing for internal layout
+              width={width > 1200 ? 800 : width - 100}
               height={width > 1200 ? 600 : 500}
               onMouseDown={(e) => {
                 const stage = e.target.getStage();
@@ -178,7 +193,6 @@ const Canvas = ({}: CanvasProps) => {
               onMouseUp={() => finishDrawing(identity?.guestId)}
               className="touch-none"
             >
-              {/* ── Layer 1: Regular Shapes ── */}
               <Layer>
                 {shapes.filter(s => s.type !== "eraser_line").map((s) => {
                   const draggable = activeTool === "select";
@@ -218,7 +232,6 @@ const Canvas = ({}: CanvasProps) => {
                   return null;
                 })}
 
-                {/* Local non-eraser drafts */}
                 {draft?.type === "rect" && (
                   <Rect x={draft.width < 0 ? draft.x + draft.width : draft.x} y={draft.height < 0 ? draft.y + draft.height : draft.y} width={Math.abs(draft.width)} height={Math.abs(draft.height)} stroke={draft.color} strokeWidth={draft.strokeWidth} dash={[5, 4]} />
                 )}
@@ -229,7 +242,6 @@ const Canvas = ({}: CanvasProps) => {
                   <Line points={draft.points} stroke={draft.color} strokeWidth={draft.strokeWidth} lineCap="round" lineJoin="round" dash={[5, 4]} />
                 )}
 
-                {/* Remote live drafts (non-eraser only) */}
                 {Object.values(remoteDrafts).map(rd => {
                   if (rd.type === "eraser_line") return null;
                   if (rd.type === "rect") return <Rect key={rd.id} x={rd.width < 0 ? rd.x + rd.width : rd.x} y={rd.height < 0 ? rd.y + rd.height : rd.y} width={Math.abs(rd.width)} height={Math.abs(rd.height)} stroke={rd.color} strokeWidth={rd.strokeWidth} opacity={0.6} />;
@@ -241,25 +253,52 @@ const Canvas = ({}: CanvasProps) => {
                 {selectedId && <Transformer ref={transformerRef} rotateEnabled={false} />}
               </Layer>
 
-              {/* ── Layer 2: Eraser strokes (destination-out composited separately) ── */}
               <Layer listening={false}>
                 {shapes.filter(s => s.type === "eraser_line").map(s => (
                   <Line key={s.id} {...(s as any)} points={(s as any).points} stroke={(s as any).color} strokeWidth={(s as any).strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
                 ))}
-                {/* Local eraser draft */}
                 {draft?.type === "eraser_line" && (
                   <Line points={draft.points} stroke={draft.color} strokeWidth={draft.strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
                 )}
-                {/* Remote eraser drafts */}
                 {Object.values(remoteDrafts).filter(rd => rd.type === "eraser_line").map(rd => (
                   <Line key={rd.id} points={(rd as any).points} stroke={(rd as any).color} strokeWidth={(rd as any).strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
                 ))}
               </Layer>
             </Stage>
 
-            {/* Status Overlay for Waiting */}
-            {isBlocked && (
-              <div className="absolute inset-0 bg-[#f5f0e8]/80 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center p-6 text-center space-y-6">
+            {/* Status Overlay for Waiting / Game State */}
+            {gameData?.state === "picking_word" && gameData.currentDrawerId === identity?.guestId && (
+               <div className="absolute inset-0 bg-[#f5f0e8]/90 backdrop-blur-[4px] z-[60] flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-500">
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-black uppercase tracking-tighter">Your Turn!</h2>
+                    <p className="text-sm font-bold text-[#0a0a0a]/50 uppercase tracking-widest">Choose a word to draw:</p>
+                  </div>
+                  <div className="flex gap-4">
+                     {gameData.wordOptions.map(word => (
+                       <button key={word} onClick={() => pickWord(word)} className="retro-btn retro-btn-primary px-6 py-3 font-black text-xs">
+                          {word}
+                       </button>
+                     ))}
+                  </div>
+               </div>
+            )}
+
+            {gameData?.state === "picking_word" && gameData.currentDrawerId !== identity?.guestId && (
+               <div className="absolute inset-0 bg-[#f5f0e8]/80 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center p-6 text-center space-y-4">
+                  <Loader2 className="animate-spin" size={32} />
+                  <p className="text-sm font-black uppercase tracking-widest">Someone is picking a word...</p>
+               </div>
+            )}
+
+            {gameData?.state === "starting" && (
+               <div className="absolute inset-0 bg-[#f5f0e8]/90 backdrop-blur-[4px] z-[70] flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in zoom-in duration-300">
+                  <h2 className="text-6xl font-black uppercase italic tracking-tighter animate-pulse">Get Ready!</h2>
+                  <p className="text-sm font-black uppercase tracking-widest text-[#0a0a0a]/50">Game starting in 3 seconds...</p>
+               </div>
+            )}
+
+            {isBlocked && (gameData?.state === "lobby" || roomStatus === "waiting") && (
+               <div className="absolute inset-0 bg-[#f5f0e8]/80 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center p-6 text-center space-y-6">
                 <div className="w-16 h-16 bg-white border-4 border-[#0a0a0a] shadow-[6px_6px_0px_#0a0a0a] flex items-center justify-center animate-bounce">
                   <Users size={32} className="text-[#0a0a0a]" />
                 </div>
@@ -269,17 +308,43 @@ const Canvas = ({}: CanvasProps) => {
                     Need at least 2 players to unlock the board. Send the link to a friend!
                   </p>
                 </div>
-                {users.length >= 2 && (
-                   <button onClick={startGame} className="retro-btn retro-btn-primary px-8 py-4 text-xs font-black animate-in zoom-in duration-500">
-                      ACTIVATE THE BOARD NOW
-                   </button>
-                )}
+                 {users.length >= 2 && adminId === identity?.guestId && (
+                    <button onClick={startGame} className="retro-btn retro-btn-primary px-8 py-4 text-xs font-black animate-in zoom-in duration-500">
+                       ACTIVATE THE BOARD NOW
+                    </button>
+                 )}
+                 {users.length >= 2 && adminId !== identity?.guestId && (
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                       Waiting for host to start...
+                    </p>
+                 )}
               </div>
             )}
           </div>
 
-          {/* BOTTOM TOOLBAR */}
-          <div className="flex items-center justify-center">
+          {/* BOTTOM TOOLBAR & GUESS INPUT */}
+          <div className="flex flex-col items-center gap-4">
+             {gameData?.state === "drawing" && gameData.currentDrawerId !== identity?.guestId && (
+                <form 
+                  onSubmit={(e) => {
+                     e.preventDefault();
+                     const input = e.currentTarget.elements.namedItem("guess") as HTMLInputElement;
+                     if (input.value.trim()) {
+                       sendChatMessage(input.value);
+                       input.value = "";
+                     }
+                  }}
+                  className="w-full max-w-md animate-in slide-in-from-bottom duration-500"
+                >
+                   <input 
+                    name="guess"
+                    autoFocus
+                    placeholder="Type your guess here..."
+                    className="w-full bg-white border-4 border-[#0a0a0a] shadow-[4px_4px_0px_#0a0a0a] px-6 py-3 text-sm font-black uppercase placeholder:text-[#0a0a0a]/20 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all"
+                   />
+                </form>
+             )}
+
              <Floatnav 
               activeTool={activeTool} 
               setActiveTool={setActiveTool} 
@@ -291,30 +356,6 @@ const Canvas = ({}: CanvasProps) => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CHAT PANEL */}
-        <div className="w-full lg:w-72 shrink-0 h-full flex flex-col gap-4">
-           <div className="bg-white border-4 border-[#0a0a0a] shadow-[6px_6px_0px_#0a0a0a] flex flex-col" style={{ height: "calc(100vh - 210px)", minHeight: "580px" }}>
-              <h3 className="text-xs font-black uppercase tracking-widest border-b-2 border-[#0a0a0a] p-4 flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
-                Live Chat
-              </h3>
-              <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                 {/* Chat content placeholder */}
-                 <div className="space-y-3 opacity-20 select-none pointer-events-none">
-                    <div className="bg-[#f5f0e8] p-2 border-2 border-[#0a0a0a] w-3/4"><div className="h-1 bg-[#0a0a0a] w-full" /></div>
-                    <div className="bg-[#f5f0e8] p-2 border-2 border-[#0a0a0a] w-1/2 self-end"><div className="h-1 bg-[#0a0a0a] w-full" /></div>
-                    <div className="bg-[#f5f0e8] p-2 border-2 border-[#0a0a0a] w-2/3"><div className="h-1 bg-[#0a0a0a] w-full" /></div>
-                 </div>
-              </div>
-              <div className="p-4 border-t-2 border-[#0a0a0a] bg-[#fdfaf6]">
-                 <input 
-                  disabled
-                  placeholder="Chat locked until session starts..."
-                  className="w-full bg-white border-2 border-[#0a0a0a] px-3 py-2 text-[10px] font-bold uppercase placeholder:text-[#0a0a0a]/20"
-                 />
-              </div>
-           </div>
-        </div>
 
       </div>
     </div>
