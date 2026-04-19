@@ -21,13 +21,7 @@ import TopBar from "./TopBar";
 import { useGuestIdentity } from "../../hooks/useGuestIdentity";
 import { useParams } from "next/navigation";
 
-interface CanvasProps {
-  mode?: string;
-  onLoginClick?: () => void;
-  onShareClick?: () => void;
-}
-
-const Canvas = ({}: CanvasProps) => {
+const Canvas = () => {
   const { width, height } = useWindowSize();
   const transformerRef = useRef<any>(null);
   const params = useParams();
