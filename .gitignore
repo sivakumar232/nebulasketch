@@ -37,9 +37,3 @@ yarn-error.log*
 .DS_Store
 *.pem
 
-architecture.md
-execution-plan.md
-build-guide.md
-incremental-guide.md
-learning-guide.md
-database-schema.md
