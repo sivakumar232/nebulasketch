@@ -252,7 +252,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     if (!isDrawing || !draft) return;
 
     let finalShape: Shape | null = null;
-    const baseId = crypto.randomUUID();
+    const baseId = draft.id; // Preserve the same ID from the draft
     const createdBy = callerGuestId;
 
     if (draft.type === "ellipse") {

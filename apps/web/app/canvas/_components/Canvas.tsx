@@ -113,7 +113,7 @@ const Canvas = () => {
   if (!width || !height) return null;
 
   return (
-    <div className="min-h-screen bg-[#e5e7eb] flex flex-col p-4 md:p-8 gap-6 font-mono overflow-auto">
+    <div className="h-screen bg-[#e5e7eb] flex flex-col p-4 md:p-6 gap-4 font-mono overflow-hidden">
       {/* ─── TOP AREA: HEADER & LOGO ─── */}
       <div className="max-w-[1600px] mx-auto w-full">
         <TopBar
@@ -131,11 +131,11 @@ const Canvas = () => {
       </div>
 
       {/* ─── MAIN GAME AREA: 3 COLUMNS ─── */}
-      <div className="max-w-[1600px] mx-auto w-full flex flex-col lg:flex-row gap-6 items-stretch">
+      <div className="max-w-[1600px] mx-auto w-full flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
         
         {/* LEFT COLUMN: PLAYER LIST & CONTROLS */}
-        <div className="w-full lg:w-64 shrink-0 space-y-4 flex flex-col">
-          <div className="bg-white border-4 border-[#0a0a0a] shadow-[6px_6px_0px_#0a0a0a] p-4 flex flex-col flex-1 min-h-[400px]">
+        <div className="w-full lg:w-64 shrink-0 flex flex-col h-full min-h-0">
+          <div className="bg-white border-4 border-[#0a0a0a] shadow-[6px_6px_0px_#0a0a0a] p-4 flex flex-col h-full min-h-0">
             <h3 className="text-xs font-black uppercase tracking-widest border-b-2 border-[#0a0a0a] pb-2 mb-4 flex items-center justify-between">
               Players
               <span className="bg-[#0a0a0a] text-white px-1.5 py-0.5 rounded text-[10px]">{users.length}</span>
@@ -193,13 +193,8 @@ const Canvas = () => {
         </div>
 
         {/* CENTER COLUMN: CANVAS & TOOLS */}
-        <div className="flex-1 flex flex-col gap-4 min-w-0">
-          <div 
-            className="bg-white border-4 border-[#0a0a0a] shadow-[8px_8px_0px_#0a0a0a] relative overflow-hidden group flex-1"
-            style={{ 
-              minHeight: "600px"
-            }}
-          >
+        <div className="flex-1 flex flex-col gap-4 min-w-0 h-full">
+          <div className="bg-white border-4 border-[#0a0a0a] shadow-[8px_8px_0px_#0a0a0a] relative overflow-hidden group flex-1 min-h-0">
             <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-50" />
             
             <Stage
@@ -225,7 +220,7 @@ const Canvas = () => {
               className="touch-none"
             >
               <Layer>
-                {shapes.filter(s => s.type !== "eraser_line").map((s) => {
+                {shapes.map((s) => {
                   const draggable = activeTool === "select";
                   
                   const handleMouseDown = (e: any) => {
@@ -260,6 +255,20 @@ const Canvas = () => {
                   if (s.type === "text") return (
                       <Text key={s.id} {...s} id={s.id} fill={s.color} draggable={draggable} {...commonHandlers} />
                   );
+                  if (s.type === "eraser_line") return (
+                      <Line 
+                        key={s.id} 
+                        {...s} 
+                        points={s.points} 
+                        stroke="white" 
+                        strokeWidth={s.strokeWidth} 
+                        lineCap="round" 
+                        lineJoin="round" 
+                        globalCompositeOperation="destination-out"
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                  );
                   return null;
                 })}
 
@@ -269,32 +278,31 @@ const Canvas = () => {
                 {draft?.type === "ellipse" && (
                   <Ellipse x={draft.x} y={draft.y} radiusX={draft.radiusX} radiusY={draft.radiusY} stroke={draft.color} strokeWidth={draft.strokeWidth} dash={[5, 4]} />
                 )}
-                {(draft?.type === "line" || draft?.type === "arrow") && (
-                  <Line points={draft.points} stroke={draft.color} strokeWidth={draft.strokeWidth} lineCap="round" lineJoin="round" dash={[5, 4]} />
+                {(draft?.type === "line" || draft?.type === "arrow" || draft?.type === "eraser_line") && (
+                  <Line points={draft.points} stroke={draft.type === "eraser_line" ? "white" : draft.color} strokeWidth={draft.strokeWidth} lineCap="round" lineJoin="round" 
+                    globalCompositeOperation={draft.type === "eraser_line" ? "destination-out" : "source-over"}
+                    dash={draft.type === "eraser_line" ? undefined : [5, 4]} 
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
                 )}
 
                 {Object.values(remoteDrafts).map(rd => {
-                  if (rd.type === "eraser_line") return null;
                   if (rd.type === "rect") return <Rect key={rd.id} x={rd.width < 0 ? rd.x + rd.width : rd.x} y={rd.height < 0 ? rd.y + rd.height : rd.y} width={Math.abs(rd.width)} height={Math.abs(rd.height)} stroke={rd.color} strokeWidth={rd.strokeWidth} opacity={0.6} />;
                   if (rd.type === "ellipse") return <Ellipse key={rd.id} x={rd.x} y={rd.y} radiusX={rd.radiusX} radiusY={rd.radiusY} stroke={rd.color} strokeWidth={rd.strokeWidth} opacity={0.6} />;
-                  if (rd.type === "line" || rd.type === "arrow") return <Line key={rd.id} points={rd.points} stroke={rd.color} strokeWidth={rd.strokeWidth} lineCap="round" lineJoin="round" opacity={0.6} />;
+                  if (rd.type === "line" || rd.type === "arrow" || rd.type === "eraser_line") return (
+                    <Line key={rd.id} points={rd.points} stroke={rd.type === "eraser_line" ? "white" : rd.color} strokeWidth={rd.strokeWidth} lineCap="round" lineJoin="round" opacity={0.6} 
+                      globalCompositeOperation={rd.type === "eraser_line" ? "destination-out" : "source-over"}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  );
                   return null;
                 })}
 
                 {selectedId && <Transformer ref={transformerRef} rotateEnabled={false} />}
               </Layer>
 
-              <Layer listening={false}>
-                {shapes.filter(s => s.type === "eraser_line").map(s => (
-                  <Line key={s.id} {...(s as any)} points={(s as any).points} stroke={(s as any).color} strokeWidth={(s as any).strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
-                ))}
-                {draft?.type === "eraser_line" && (
-                  <Line points={draft.points} stroke={draft.color} strokeWidth={draft.strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
-                )}
-                {Object.values(remoteDrafts).filter(rd => rd.type === "eraser_line").map(rd => (
-                  <Line key={rd.id} points={(rd as any).points} stroke={(rd as any).color} strokeWidth={(rd as any).strokeWidth} lineCap="round" lineJoin="round" globalCompositeOperation="destination-out" />
-                ))}
-              </Layer>
             </Stage>
 
             {/* Status Overlay for Waiting / Game State */}
@@ -367,7 +375,7 @@ const Canvas = () => {
         </div>
 
         {/* RIGHT COLUMN: CHAT & NOTIFICATIONS */}
-        <div className="w-full lg:w-80 shrink-0 flex flex-col h-[600px] lg:h-auto">
+        <div className="w-full lg:w-80 shrink-0 flex flex-col h-full min-h-0">
            <div className="bg-white border-4 border-[#0a0a0a] shadow-[6px_6px_0px_#0a0a0a] flex flex-col h-full overflow-hidden">
               <h3 className="p-4 text-xs font-black uppercase tracking-widest border-b-2 border-[#0a0a0a] flex items-center gap-2">
                  <MessageSquare size={14} />
