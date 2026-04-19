@@ -57,7 +57,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
   const [roomStatus, setRoomStatus] = useState<"waiting" | "active">("waiting");
   const [remoteDrafts, setRemoteDrafts] = useState<Record<string, Shape>>({}); // For live drawing sync
   const [gameData, setGameData] = useState<RoomGameData | null>(null);
-  const [messages, setMessages] = useState<{ userId: string; name: string; text: string; system?: boolean; type?: string }[]>([]);
+  const [messages, setMessages] = useState<{ userId: string; userName: string; content: string; system?: boolean; type?: string }[]>([]);
   const [adminId, setAdminId] = useState<string | null>(null);
 
   // Keep a stable ref for sendMessage so we can call it outside of setShapes
@@ -131,12 +131,12 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
       } else if (payload.type === "clear_canvas") {
         setShapes([]);
       } else if (payload.type === "chat") {
-        setMessages((prev) => [...prev, { userId: payload.senderId || "system", name: payload.name || (payload.system ? "System" : "Unknown"), text: payload.text, system: payload.system }]);
+        setMessages((prev) => [...prev, { userId: payload.senderId || "system", userName: payload.name || (payload.system ? "System" : "Unknown"), content: payload.text, system: payload.system }]);
       } else if (payload.type === "correct_guess") {
-        setMessages((prev) => [...prev, { userId: payload.data.userId, name: payload.data.name, text: "guessed the word correctly!", system: true, type: "correct" }]);
+        setMessages((prev) => [...prev, { userId: payload.data.userId, userName: payload.data.name, content: "guessed the word correctly!", system: true, type: "correct" }]);
         if (gameData) setGameData({ ...gameData, scores: payload.data.scores });
       } else if (payload.type === "close_guess") {
-        setMessages((prev) => [...prev, { userId: payload.data.userId, name: payload.data.name, text: "is close!", system: true, type: "close" }]);
+        setMessages((prev) => [...prev, { userId: payload.data.userId, userName: payload.data.name, content: "is close!", system: true, type: "close" }]);
       }
     }
   );
@@ -155,8 +155,8 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     sendMessageRef.current?.({ type: "draft_draw", roomId, shape: draft });
   }, [draft, isDrawing, roomId]);
 
-  const startGame = () => {
-    sendMessage({ type: "start_game", roomId });
+  const startGame = (settings?: { maxRounds: number }) => {
+    sendMessage({ type: "start_game", roomId, settings });
   };
 
   // ───────── START DRAW ─────────
@@ -391,7 +391,7 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     startGame,
     gameData,
     messages,
-    sendChatMessage: (text: string) => sendMessage({ type: "chat", text }),
+    sendChatMessage: (text: string) => sendMessage({ type: "chat", roomId, text }),
     pickWord: (word: string) => sendMessage({ type: "pick_word", word }),
   };
 }

@@ -161,7 +161,6 @@ wss.on("connection", (ws, request) => {
     if (payload.type === "join_room") {
       const roomId: string = payload.roomId;
       const guestName: string = payload.guestName || "Unknown";
-
       user.name = guestName;
 
       if (!user.rooms.includes(roomId)) {
@@ -170,29 +169,24 @@ wss.on("connection", (ws, request) => {
 
       console.log(`[WS] join_room userId=${userId} name="${guestName}" room=${roomId}`);
 
-      // Ensure room exists in Redis. If not, create a fallback entry.
       try {
-        const exists = await redis.exists(`room:${roomId}`);
-        if (!exists) {
-          console.log(`[WS] Room ${roomId} not found in Redis. Creating fallback entry with userId=${userId} as admin.`);
-          const fallbackRoom = {
-            id: `fb_${Date.now()}`,
-            name: "Auto-created Room",
-            slug: roomId,
-            adminId: userId,
-            status: "active",
-            createdAt: new Date().toISOString(),
-          };
-          await redis.hset(`room:${roomId}`, fallbackRoom);
-          await redis.expire(`room:${roomId}`, 86400);
-        } else {
-          // Reset TTL for existing room
-          await redis.expire(`room:${roomId}`, 86400);
-          await redis.expire(`elements:${roomId}`, 86400);
-          await redis.expire(`participants:${roomId}`, 86400);
+        // Admin Takeover Logic: 
+        // If room is empty OR the current admin is no longer connected, the joiner takes over as admin.
+        const currentAdminId = await getRoomAdmin(roomId);
+        const isAdminConnected = connectedUsers.some(u => u.userId === currentAdminId && u.rooms.includes(roomId));
+        const remainingInRoom = connectedUsers.filter(u => u.rooms.includes(roomId));
+
+        if (!currentAdminId || remainingInRoom.length === 0 || !isAdminConnected) {
+          console.log(`[WS] Admin Takeover: userId=${userId} is the new host for room ${roomId} (previous was ${currentAdminId})`);
+          await redis.hset(`room:${roomId}`, { adminId: userId });
         }
 
-        // Add user to participants set for Redis visibility
+        // Reset TTL
+        await redis.expire(`room:${roomId}`, 86400);
+        await redis.expire(`elements:${roomId}`, 86400);
+        await redis.expire(`participants:${roomId}`, 86400);
+
+        // Add user to participants set
         await redis.sadd(`participants:${roomId}`, guestName);
         await redis.expire(`participants:${roomId}`, 86400);
       } catch (err) {
@@ -202,110 +196,99 @@ wss.on("connection", (ws, request) => {
       // Broadcast updated user list (and admin info) to all in room
       await broadcastUserList(roomId);
 
-      // Send existing shapes to this new joiner
+      // Send existing shapes
       const shapes = await loadShapesForRoom(roomId);
       ws.send(JSON.stringify({ type: "init_shapes", shapes }));
+
+      // Send current game state
+      const currentGameState = gameEngine.getRoom(roomId);
+      ws.send(JSON.stringify({ type: "game_state_update", data: currentGameState }));
+      return;
+    }
+
+    // ─── ALL OTHER MESSAGES REQUIRE A ROOM ───
+    const roomId = payload.roomId;
+    if (!roomId) return;
+
+    // Authorization Check: Must be in the room
+    if (!user.rooms.includes(roomId)) {
+      console.log(`[WS] Blocked ${payload.type}: userId=${user.userId} is not in room ${roomId}`);
       return;
     }
 
     // ─── START GAME ───
     if (payload.type === "start_game") {
-      const roomId: string = payload.roomId;
-
-      // Authorization Check
-      if (!user.rooms.includes(roomId)) {
-        console.log(`[WS] Blocked start_game: userId=${user.userId} is not in room ${roomId}`);
-        return;
-      }
-
-      // Verify Admin
       const adminId = await getRoomAdmin(roomId);
       if (adminId && adminId !== user.userId) {
-        console.log(`[WS] Blocked start_game: userId=${user.userId} is not the admin (${adminId})`);
+        console.log(`[WS] Blocked start_game: userId=${user.userId} is not the admin`);
         ws.send(JSON.stringify({ type: "error", message: "Only the host can start the game!" }));
         return;
       }
-
       const roomUsers = connectedUsers.filter(u => u.rooms.includes(roomId));
-      const userIds = roomUsers.map(u => u.userId);
-      console.log(`[WS] start_game room=${roomId} users=${userIds.length} names=${roomUsers.map(u => u.name).join(", ")}`);
-      gameEngine.startGame(roomId, userIds);
+      gameEngine.startGame(roomId, roomUsers.map(u => u.userId), payload.settings);
       return;
     }
 
     // ─── PICK WORD ───
     if (payload.type === "pick_word") {
-      const roomId: string = payload.roomId;
-
-      // Authorization Check
-      if (!user.rooms.includes(roomId)) {
-        console.log(`[WS] Blocked pick_word: userId=${user.userId} is not in room ${roomId}`);
-        return;
-      }
-
-      const word: string = payload.word;
-      console.log(`[WS] pick_word userId=${user.userId} word=${word}`);
-      gameEngine.pickWord(roomId, word);
+      gameEngine.pickWord(roomId, payload.word);
       return;
     }
 
-    // ─── DRAW / CHAT / DELETE / LIVE DRAFT ───
-    if (
-      payload.type === "draw" ||
-      payload.type === "chat" ||
-      payload.type === "delete_shape" ||
-      payload.type === "draft_draw"
-    ) {
-      const roomId: string = payload.roomId;
-
-      // Authorization Check
-      if (!user.rooms.includes(roomId)) {
-        console.log(`[WS] Blocked ${payload.type}: userId=${user.userId} is not in room ${roomId}`);
+    // ─── CHAT HANDLING ───
+    if (payload.type === "chat") {
+      const roomState = gameEngine.getRoom(roomId);
+      // Permission Guard: Drawer cannot chat (prevents spoilers)
+      if (roomState.state === "drawing" && roomState.currentDrawerId === user.userId) {
+        console.log(`[WS] Blocked chat from drawer: userId=${user.userId}`);
         return;
       }
 
-      let isCorrectGuess = false;
+      const isCorrectGuess = gameEngine.handleGuess(roomId, user.userId, user.name, payload.text);
 
-      // 1. If it's a chat message, check for guesses first
-      if (payload.type === "chat") {
-        isCorrectGuess = gameEngine.handleGuess(roomId, user.userId, user.name, payload.text);
+      // If it wasn't a correct guess (which is handled by gameEngine broadcasting special events),
+      // or even if it was close, we still might want to show the guess to others (depending on rules).
+      // Standard Skribbl: Correct guesses are hidden, others are shown.
+      if (!isCorrectGuess) {
+        connectedUsers.forEach(u => {
+          if (u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN) {
+            // Don't send guessers' chat to the drawer either (prevents distraction/spoilers)
+            if (roomState.state === "drawing" && u.userId === roomState.currentDrawerId) return;
+
+            u.ws.send(JSON.stringify({
+              type: "chat",
+              text: payload.text,
+              senderId: user.userId,
+              name: user.name
+            }));
+          }
+        });
       }
+      return;
+    }
 
-      // 2. If it's a DRAW or DRAFT event, verify permissions
+    // ─── DRAW / DELETE / LIVE DRAFT ───
+    if (
+      payload.type === "draw" ||
+      payload.type === "delete_shape" ||
+      payload.type === "draft_draw"
+    ) {
       if (payload.type === "draw" || payload.type === "draft_draw") {
         const roomState = gameEngine.getRoom(roomId);
-
         if (roomState.state === "drawing") {
-          if (roomState.currentDrawerId !== user.userId) {
-            console.log(`[WS] Drawing blocked: user ${user.userId} is not the current drawer (${roomState.currentDrawerId})`);
-            return;
-          }
+          if (roomState.currentDrawerId !== user.userId) return;
         } else {
-          // Block in ALL other states, including lobby
-          console.log(`[WS] Drawing blocked: game state is ${roomState.state}`);
           return;
         }
       }
 
-      // 3. Relay to others
-      // FIX: Also relay back to the sender for chat messages (unless it's a correct guess)
-      // so their local UI updates correctly.
       connectedUsers.forEach(u => {
         const isSender = u.ws === ws;
-        if (u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN) {
-          // If it's a chat message:
-          // - Send ONLY to sender (to confirm their guess was processed)
-          // - Do NOT relay to others (to remove 'live chat' feel)
-          if (payload.type === "chat") {
-            if (isSender) u.ws.send(JSON.stringify({ ...payload, senderId: user.userId }));
-          } else {
-            // Non-chat events (draw, draft, etc.) go to everyone EXCEPT sender
-            if (!isSender) u.ws.send(JSON.stringify({ ...payload, senderId: user.userId }));
-          }
+        if (u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN && !isSender) {
+          u.ws.send(JSON.stringify({ ...payload, senderId: user.userId }));
         }
       });
 
-      // 4. Persistence
       if (payload.type === "draw" && payload.shape) persistShape(roomId, payload.shape);
       if (payload.type === "delete_shape" && payload.shapeId) deleteShape(roomId, payload.shapeId);
     }
@@ -313,31 +296,36 @@ wss.on("connection", (ws, request) => {
 
   ws.on("close", async () => {
     const index = connectedUsers.findIndex(u => u.ws === ws);
-    if (index !== -1) {
-      const removedUser = connectedUsers[index]!;
-      connectedUsers.splice(index, 1);
+    if (index === -1) return;
 
-      console.log(`[WS] Disconnected userId=${removedUser.userId} name="${removedUser.name}". Total: ${connectedUsers.length}`);
+    const removedUser = connectedUsers[index]!;
+    connectedUsers.splice(index, 1);
+    console.log(`[WS] Disconnected userId=${removedUser.userId}. Remaining: ${connectedUsers.length}`);
 
-      for (const roomId of removedUser.rooms) {
-        await broadcastUserList(roomId);
+    for (const roomId of removedUser.rooms) {
+      const remainingInRoom = connectedUsers.filter(u => u.rooms.includes(roomId));
 
-        // Check if room is completely empty
-        const remainingInRoom = connectedUsers.filter(u => u.rooms.includes(roomId));
+      // Admin Succession
+      const currentAdminId = await getRoomAdmin(roomId);
+      if (removedUser.userId === currentAdminId && remainingInRoom.length > 0) {
+        const nextAdmin = remainingInRoom[0];
+        if (nextAdmin) {
+          console.log(`[WS] Admin left. New host of ${roomId}: ${nextAdmin.userId}`);
+          await redis.hset(`room:${roomId}`, { adminId: nextAdmin.userId });
+        }
+      }
 
-        // Notify game engine about disconnect
-        gameEngine.handlePlayerDisconnect(roomId, removedUser.userId);
+      await broadcastUserList(roomId);
+      gameEngine.handlePlayerDisconnect(roomId, removedUser.userId);
 
-        if (remainingInRoom.length === 0) {
-          console.log(`[WS] Room ${roomId} is empty. Scheduling deletion in 60 seconds.`);
-          gameEngine.cleanupRoom(roomId); // Stop timers
-          try {
-            await redis.expire(`room:${roomId}`, 60);
-            await redis.expire(`elements:${roomId}`, 60);
-            await redis.expire(`participants:${roomId}`, 60);
-          } catch (err) {
-            console.error(`[WS] Failed to set cleanup TTL for room ${roomId}:`, err);
-          }
+      if (remainingInRoom.length === 0) {
+        gameEngine.cleanupRoom(roomId);
+        try {
+          await redis.expire(`room:${roomId}`, 60);
+          await redis.expire(`elements:${roomId}`, 60);
+          await redis.expire(`participants:${roomId}`, 60);
+        } catch (err) {
+          console.error(`[WS] Cleanup error for ${roomId}:`, err);
         }
       }
     }

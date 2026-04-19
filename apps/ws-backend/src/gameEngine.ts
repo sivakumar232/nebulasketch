@@ -1,6 +1,6 @@
 import { WORD_BANK } from "./words";
 import { WebSocket } from "ws";
-import { GameState, RoomGameData } from "@repo/common/types";
+import { RoomGameData } from "../../../packages/common/src/types";
 
 export class GameEngine {
     private rooms: Map<string, RoomGameData> = new Map();
@@ -28,8 +28,8 @@ export class GameEngine {
         return this.rooms.get(roomId)!;
     }
 
-    public startGame(roomId: string, userIds: string[]) {
-        console.log(`[GameEngine] startGame room=${roomId} users=${userIds.join(", ")}`);
+    public startGame(roomId: string, userIds: string[], settings?: { maxRounds?: number }) {
+        console.log(`[GameEngine] startGame room=${roomId} users=${userIds.join(", ")} settings=${JSON.stringify(settings)}`);
         const room = this.getRoom(roomId);
         if (userIds.length < 2) {
             console.log(`[GameEngine] Cannot start game: Not enough players (${userIds.length})`);
@@ -40,6 +40,14 @@ export class GameEngine {
         room.drawOrder = [...userIds].sort(() => Math.random() - 0.5);
         room.drawerIndex = 0;
         room.round = 1;
+
+        // Apply custom settings if provided
+        if (settings?.maxRounds) {
+            room.maxRounds = settings.maxRounds;
+        } else {
+            room.maxRounds = 3; // Default
+        }
+
         room.scores = {};
         userIds.forEach(id => room.scores[id] = 0);
 
