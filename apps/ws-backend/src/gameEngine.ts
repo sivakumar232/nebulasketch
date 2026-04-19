@@ -20,6 +20,7 @@ export class GameEngine {
                 currentDrawerId: null,
                 wordOptions: [],
                 currentWord: null,
+                wordHint: null,
                 timerEndsAt: null,
                 scores: {},
                 guessedCorrectly: [],
@@ -66,6 +67,7 @@ export class GameEngine {
         room.currentDrawerId = room.drawOrder[room.drawerIndex] || null;
         room.guessedCorrectly = [];
         room.currentWord = null;
+        room.wordHint = null;
 
         console.log(`[GameEngine] startTurn room=${roomId} drawer=${room.currentDrawerId} round=${room.round}`);
 
@@ -93,15 +95,52 @@ export class GameEngine {
 
         room.state = "drawing";
         room.currentWord = word;
+        room.wordHint = word.replace(/[a-zA-Z]/g, "_");
         room.timerEndsAt = Date.now() + 80000; // 80s round
 
         this.broadcast(roomId, { type: "game_state_update", data: room });
 
-        // Round timer
-        this.setTimer(roomId, 80000, () => {
-            console.log(`[GameEngine] Round timer expired for room ${roomId}`);
-            this.endRound(roomId);
+        // Hint reveal schedule
+        // 1st Hint at 50% time left (40s into round)
+        this.setTimer(roomId, 40000, () => {
+            if (room.state === "drawing" && room.currentWord) {
+                this.revealHint(roomId);
+                // 2nd Hint at 25% time left (60s into round)
+                this.setTimer(roomId, 20000, () => {
+                    if (room.state === "drawing" && room.currentWord) {
+                        this.revealHint(roomId);
+                    }
+                    // Final round end timer
+                    this.setTimer(roomId, 20000, () => {
+                        this.endRound(roomId);
+                    });
+                });
+            } else if (room.state === "drawing") {
+                this.endRound(roomId);
+            }
         });
+    }
+
+    private revealHint(roomId: string) {
+        const room = this.getRoom(roomId);
+        if (!room.currentWord || !room.wordHint) return;
+
+        const hintArr = room.wordHint.split("");
+        const unrevealedIndices: number[] = [];
+
+        for (let i = 0; i < hintArr.length; i++) {
+            if (hintArr[i] === "_" && room.currentWord[i] !== " ") {
+                unrevealedIndices.push(i);
+            }
+        }
+
+        if (unrevealedIndices.length > 1) { // Leave at least one hidden until end
+            const randomIndex = unrevealedIndices[Math.floor(Math.random() * unrevealedIndices.length)]!;
+            hintArr[randomIndex] = room.currentWord[randomIndex]!;
+            room.wordHint = hintArr.join("");
+            console.log(`[GameEngine] Revealed hint for room ${roomId}: ${room.wordHint}`);
+            this.broadcast(roomId, { type: "game_state_update", data: room });
+        }
     }
 
     public handleGuess(roomId: string, userId: string, name: string, guess: string): boolean {
@@ -260,5 +299,21 @@ export class GameEngine {
             this.timers.delete(roomId);
         }
         this.rooms.delete(roomId);
+    }
+
+    public returnToLobby(roomId: string) {
+        const room = this.getRoom(roomId);
+        room.state = "lobby";
+        room.currentWord = null;
+        room.wordHint = null;
+        room.currentDrawerId = null;
+        room.guessedCorrectly = [];
+        room.wordOptions = [];
+        if (this.timers.has(roomId)) {
+            clearTimeout(this.timers.get(roomId));
+            this.timers.delete(roomId);
+        }
+        this.broadcast(roomId, { type: "game_state_update", data: room });
+        this.broadcast(roomId, { type: "clear_canvas", roomId });
     }
 }

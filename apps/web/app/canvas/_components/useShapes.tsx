@@ -393,5 +393,6 @@ export function useShapes(roomId?: string, guestId?: string, guestName?: string)
     messages,
     sendChatMessage: (text: string) => sendMessage({ type: "chat", roomId, text }),
     pickWord: (word: string) => sendMessage({ type: "pick_word", word }),
+    returnToLobby: () => sendMessage({ type: "return_to_lobby", roomId }),
   };
 }

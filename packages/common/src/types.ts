@@ -34,6 +34,7 @@ export interface RoomGameData {
     currentDrawerId: string | null;
     wordOptions: string[];
     currentWord: string | null;
+    wordHint: string | null;
     timerEndsAt: number | null;
     scores: Record<string, number>;
     guessedCorrectly: string[];

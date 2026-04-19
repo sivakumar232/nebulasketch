@@ -12,6 +12,7 @@ interface TopBarProps {
   gameState?: string;
   timerEndsAt?: number | null;
   currentWord?: string | null;
+  wordHint?: string | null;
   isDrawer?: boolean;
 }
 
@@ -26,6 +27,7 @@ export default function TopBar({
   gameState,
   timerEndsAt,
   currentWord,
+  wordHint,
   isDrawer
 }: TopBarProps) {
   const [copied, setCopied] = useState(false);
@@ -59,19 +61,21 @@ export default function TopBar({
   }, [timerEndsAt, gameState]);
 
   const renderWordHint = () => {
-    if (!currentWord) return null;
-    if (isDrawer) {
+    if (isDrawer && currentWord) {
       return (
         <span className="text-xl font-black text-blue-600 uppercase tracking-tighter">
           {currentWord}
         </span>
       );
     }
-    return (
-      <span className="text-xl font-black text-[#0a0a0a] uppercase tracking-[0.3em] font-mono leading-none pt-1">
-        {currentWord.replace(/[a-zA-Z]/g, "_")}
-      </span>
-    );
+    if (wordHint) {
+      return (
+        <span className="text-xl font-black text-[#0a0a0a] uppercase tracking-[0.3em] font-mono leading-none pt-1">
+          {wordHint}
+        </span>
+      );
+    }
+    return null;
   };
 
   return (

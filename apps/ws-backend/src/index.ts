@@ -21,7 +21,6 @@ const connectedUsers: User[] = [];
 // Initialize Game Engine
 const gameEngine = new GameEngine(async (roomId, message) => {
   const roomUsers = connectedUsers.filter(u => u.rooms.includes(roomId));
-  const payload = JSON.stringify(message);
 
   // Special handling for server-side actions triggered by game engine
   if (message.type === "clear_canvas") {
@@ -30,7 +29,18 @@ const gameEngine = new GameEngine(async (roomId, message) => {
 
   roomUsers.forEach(u => {
     if (u.ws.readyState === WebSocket.OPEN) {
-      u.ws.send(payload);
+      let payload = message;
+
+      // SECURITY: Mask currentWord for guessers in game_state_update
+      if (message.type === "game_state_update" && message.data) {
+        const data = { ...message.data };
+        if (data.currentDrawerId !== u.userId && data.state === "drawing") {
+          data.currentWord = null; // Hide the actual word
+        }
+        payload = { ...message, data };
+      }
+
+      u.ws.send(JSON.stringify(payload));
     }
   });
 });
@@ -232,6 +242,14 @@ wss.on("connection", (ws, request) => {
     // ─── PICK WORD ───
     if (payload.type === "pick_word") {
       gameEngine.pickWord(roomId, payload.word);
+      return;
+    }
+
+    // ─── RETURN TO LOBBY ───
+    if (payload.type === "return_to_lobby") {
+      const adminId = await getRoomAdmin(roomId);
+      if (adminId && adminId !== user.userId) return;
+      gameEngine.returnToLobby(roomId);
       return;
     }
 

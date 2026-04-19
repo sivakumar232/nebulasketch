@@ -16,7 +16,7 @@ import { useRef, useEffect, useState } from "react";
 import { Tool } from "./types";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { RoomGameData } from "../../../../../packages/common/src/types";
-import { Users, Loader2, Copy, Check, Settings2, Minus, Plus as PlusIcon, MessageSquare, Lock, Send } from "lucide-react";
+import { Users, Loader2, Copy, Check, Settings2, Minus, Plus as PlusIcon, MessageSquare, Lock, Send, Trophy } from "lucide-react";
 import TopBar from "./TopBar";
 import { useGuestIdentity } from "../../hooks/useGuestIdentity";
 import { useParams } from "next/navigation";
@@ -57,6 +57,7 @@ const Canvas = () => {
     messages,
     sendChatMessage,
     pickWord,
+    returnToLobby,
   } = useShapes(roomSlug, identity?.guestId, identity?.name || undefined);
 
   const [copied, setCopied] = useState(false);
@@ -126,6 +127,7 @@ const Canvas = () => {
           gameState={gameData?.state}
           timerEndsAt={gameData?.timerEndsAt}
           currentWord={gameData?.currentWord}
+          wordHint={gameData?.wordHint}
           isDrawer={isMyTurn}
         />
       </div>
@@ -335,6 +337,48 @@ const Canvas = () => {
                <div className="absolute inset-0 bg-[#f5f0e8]/90 backdrop-blur-[4px] z-[70] flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in zoom-in duration-300">
                   <h2 className="text-6xl font-black uppercase italic tracking-tighter animate-pulse">Get Ready!</h2>
                   <p className="text-sm font-black uppercase tracking-widest text-[#0a0a0a]/50">Game starting in 3 seconds...</p>
+               </div>
+            )}
+
+            {gameData?.state === "game_over" && (
+               <div className="absolute inset-0 bg-[#f5f0e8]/95 backdrop-blur-[8px] z-[80] flex flex-col items-center justify-center p-8 text-center space-y-10 animate-in fade-in duration-700">
+                  <div className="space-y-4">
+                    <Trophy className="mx-auto text-yellow-500 transform scale-[2] mb-6" size={48} />
+                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Game Over!</h2>
+                    <p className="text-sm font-black text-[#0a0a0a]/50 uppercase tracking-widest">Final Standings</p>
+                  </div>
+
+                  <div className="w-full max-w-md space-y-3">
+                     {Object.entries(gameData.scores || {})
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([uid, score], idx) => {
+                           const userName = users.find(u => u.userId === uid)?.name || "Unknown";
+                           return (
+                              <div key={uid} className={`flex items-center gap-4 p-4 border-4 border-[#0a0a0a] shadow-[4px_4px_0px_#0a0a0a] transform transition-all ${idx === 0 ? 'bg-yellow-100 scale-105 select-none' : 'bg-white'}`}>
+                                 <div className={`w-8 h-8 rounded-full border-2 border-[#0a0a0a] flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-yellow-400' : 'bg-[#f5f0e8]'}`}>
+                                    {idx + 1}
+                                 </div>
+                                 <span className="flex-1 text-left font-black uppercase truncate">{userName}</span>
+                                 <span className="font-black text-blue-600">{score} pts</span>
+                              </div>
+                           );
+                        })
+                     }
+                  </div>
+
+                  {isAdmin && (
+                     <button 
+                       onClick={() => returnToLobby()} 
+                       className="retro-btn retro-btn-primary px-12 py-4 text-sm font-black uppercase tracking-widest shadow-[8px_8px_0px_#0a0a0a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all"
+                     >
+                        PLAY AGAIN
+                     </button>
+                  )}
+                  {!isAdmin && (
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                      Waiting for host to restart game...
+                    </p>
+                  )}
                </div>
             )}
 
