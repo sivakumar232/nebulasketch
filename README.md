@@ -1,135 +1,141 @@
-# Turborepo starter
+# NebulaSketch 🎨
 
-This Turborepo starter is maintained by the Turborepo core team.
+A real-time, multiplayer collaborative drawing and word-guessing game (similar to Skribbl.io). Players can join shared rooms instantly without registering, take turns drawing a secret word, and guess what's being drawn in a live chat.
 
-## Using this example
+---
 
-Run the following command:
+## 🏗️ System Architecture
 
-```sh
-npx create-turbo@latest
+Below is the system architecture showing how the Next.js frontend, Express REST API, WebSocket server, and Redis data layer communicate:
+
+![NebulaSketch System Architecture](./architecture.png)
+
+### Architecture Overview (Flowchart)
+
+```mermaid
+flowchart TD
+    subgraph CLIENT["🖥️ Browser (Next.js · Port 3000)"]
+        LB["Lobby Page\nEnter name + Create/Join Room"]
+        CP["Canvas Page\n/canvas/roomSlug"]
+        WH["useWebSocket Hook\nConnects with name + roomId"]
+        US["useShapes Hook\nManages canvas + game state"]
+        CV["Canvas UI\nKonva Stage + Chat + Player List"]
+
+        LB --> CP
+        CP --> WH
+        WH --> US
+        US --> CV
+    end
+
+    subgraph RESTAPI["📡 REST API (Port 3001)"]
+        RC["POST /api/room/create\nGenerates 6-char room slug"]
+        RG["GET /api/room/:slug\nFetch room info"]
+    end
+
+    subgraph WSSERVER["⚡ WebSocket Server (Port 8080)"]
+        JR["join_room\nUser joins with name + roomSlug"]
+        MR["Message Router\nRoutes by message type"]
+        BC["Broadcaster\nSends to all users in that room"]
+
+        subgraph GE["🎮 GameEngine (In-Memory)"]
+            GM["Game State per Room\nround, scores, drawer, word"]
+            TM["Server Timers\n80s draw · 10s pick · 3s start"]
+            GM <--> TM
+        end
+
+        JR --> MR
+        MR --> BC
+        MR --> GM
+        GM --> BC
+    end
+
+    subgraph REDIS["🗄️ Redis (Port 6379)"]
+        R1["room:{slug}\nRoom metadata + adminId"]
+        R2["elements:{slug}\nAll canvas shapes as JSON"]
+        R3["participants:{slug}\nPlayer names in room"]
+    end
+
+    LB -- "POST → get slug\nNavigate to /canvas/slug" --> RC
+    RC -- "Store room + 24h TTL" --> R1
+    CP -- "Connect WebSocket\nsend name + roomSlug" --> JR
+    JR -- "Read/Write adminId" --> R1
+    JR -- "Load existing shapes" --> R2
+    JR -- "Add player name" --> R3
+    MR -- "Save final shapes" --> R2
+    MR -- "Delete erased shapes" --> R2
+    BC -- "Push updates\nshapes · scores · chat · hints" --> CV
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## ✨ Features
 
-### Apps and Packages
+- **Real-Time Collaboration:** Throttled 30fps WebSocket messaging ensures other players see live strokes as they are drawn.
+- **Turn-Based Game Loop:** Fully managed in-memory on the server, coordinating lobbies, word selection, round clocks, dynamic hint reveals, and scoring.
+- **No-Authentication Rooms:** Guest identities are maintained via browser `localStorage` combined with ephemeral Redis sessions.
+- **Auto-Expiration & Cleanup:** Rooms and canvas histories automatically delete from Redis after 24 hours of inactivity, or 60 seconds after the last participant disconnects.
+- **Robust Canvas Interface:** Implemented using Konva.js with pen, selection, shape resizing, and layer composite operations for erasers.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+---
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## 🚀 Quick Start (Local Development)
 
-### Utilities
+### 1. Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [pnpm](https://pnpm.io/) (`npm i -g pnpm`)
+- [Docker & Docker Compose](https://www.docker.com/)
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+### 2. Start Redis
+Launch the in-memory cache layer:
+```bash
+docker-compose up -d
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+### 3. Install Dependencies
+Install packages across the monorepo workspace:
+```bash
+pnpm install
 ```
 
-### Develop
+### 4. Set Up Environment Variables
+Create `.env` files in the respective directories based on the templates:
 
-To develop all apps and packages, run the following command:
+*   **REST Backend (`apps/backend/.env`):**
+    ```env
+    JWT_SECRET=your-secret-key-min-32-chars
+    PORT=3001
+    NODE_ENV=development
+    REDIS_URL=redis://localhost:6379
+    ```
+*   **Next.js Frontend (`apps/web/.env`):**
+    ```env
+    NEXT_PUBLIC_API_URL=http://localhost:3001
+    NEXT_PUBLIC_WS_URL=ws://localhost:8080
+    ```
 
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+### 5. Run the Project
+Start the frontend, REST backend, and WebSocket server simultaneously:
+```bash
+pnpm dev
 ```
 
-### Remote Caching
+The services will be accessible at:
+- **Frontend (UI):** http://localhost:3000
+- **REST API:** http://localhost:3001
+- **WebSocket:** ws://localhost:8080
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+---
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+## 📂 Project Structure
 
 ```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+draw-app/
+├── apps/
+│   ├── web/           # Next.js 16 + React 19 Frontend (Port 3000)
+│   ├── backend/       # Express REST API (Port 3001)
+│   └── ws-backend/    # Node.js WebSocket & Game Engine (Port 8080)
+├── packages/
+│   ├── common/        # Shared Zod validation schemas & TypeScript types
+│   ├── backend-common/# Shared Redis clients and environment configuration
+│   └── db/            # Prisma schemas (Reserved for future persistence)
 ```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
